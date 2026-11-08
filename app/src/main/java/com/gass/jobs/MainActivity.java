@@ -156,6 +156,7 @@ public class MainActivity extends Activity {
         nav.setBackgroundColor(Color.WHITE);
         nav.setPadding(5, 8, 5, 8);
         nav.addView(button("Emplois", false, this::showHome), new LinearLayout.LayoutParams(0, 48, 1));
+        nav.addView(button("Sources", false, this::showOfficialSources), new LinearLayout.LayoutParams(0, 48, 1));
         nav.addView(button("Bureaux", false, this::showEmploymentOffices), new LinearLayout.LayoutParams(0, 48, 1));
         nav.addView(button("Profil", false, this::showProfile), new LinearLayout.LayoutParams(0, 48, 1));
         root.addView(nav);
@@ -267,6 +268,8 @@ public class MainActivity extends Activity {
         content.addView(switcher);
         space(content, 12);
         content.addView(button("Trouver un bureau de l'emploi", false, this::showEmploymentOffices));
+        space(content, 8);
+        content.addView(button("Consulter les sources officielles d'emploi", false, this::showOfficialSources));
         space(content, 18);
 
         if (employerMode) {
@@ -330,6 +333,22 @@ public class MainActivity extends Activity {
         resultsContainer = column();
         content.addView(resultsContainer);
         renderJobs();
+    }
+
+    private void showOfficialSources() {
+        base("Offres officielles en Tunisie", "Accès direct aux portails publics — sans copie ni republication des annonces.");
+        content.addView(text("Consultez les annonces directement sur les sites officiels. Les disponibilités, conditions et dates limites sont celles publiées par chaque organisme.", 14, muted, false));
+        space(content, 16);
+        infoCard("ANETI — Agence nationale pour l'emploi", "Portail national de l'emploi et des services aux demandeurs d'emploi et aux entreprises. Les offres doivent être vérifiées sur le site source.", "Ouvrir emploi.nat.tn", () -> openExternal("https://www.emploi.nat.tn/"));
+        infoCard("Concours de la fonction publique", "Portail national des concours et recrutements publics. Vérifiez les conditions, pièces exigées et délais dans chaque avis.", "Ouvrir concours.gov.tn", () -> openExternal("https://www.concours.gov.tn/"));
+        infoCard("Ministère de l'Emploi", "Informations officielles, directions régionales, programmes et actualités du ministère.", "Ouvrir le ministère", () -> openExternal("https://www.emploi.gov.tn/fr/"));
+        infoCard("Ministère de l'Intérieur — recrutements", "Portail de recrutement et avis publiés par le ministère. Consultez chaque annonce pour les modalités officielles.", "Ouvrir le portail de recrutement", () -> openExternal("https://recrutementdaf.interieur.gov.tn/Daaf/home"));
+        space(content, 6);
+        content.addView(text("Transparence et fiabilité", 18, ink, true));
+        space(content, 6);
+        content.addView(text("GASS-JOBS ne prétend pas disposer d'une API ANETI ni d'un flux RSS public vérifié. Pour éviter les annonces périmées ou non autorisées, cette version ouvre les portails d'origine. Une intégration automatique sera ajoutée uniquement après confirmation des conditions de réutilisation ou accord du fournisseur.", 13, muted, false));
+        space(content, 10);
+        content.addView(button("Voir les bureaux régionaux", true, this::showEmploymentOffices));
     }
 
     private void officeCard(String governorate, String director, String address, String phone, String email) {
