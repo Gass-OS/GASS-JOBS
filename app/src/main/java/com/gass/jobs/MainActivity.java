@@ -9,6 +9,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -68,7 +69,12 @@ public class MainActivity extends Activity {
         b.setTextSize(14);
         b.setTextColor(primary ? Color.WHITE : ink);
         b.setBackground(shape(primary ? green : Color.rgb(232, 238, 242), 24));
-        b.setPadding(18, 5, 18, 5);
+        b.setPadding(20, 14, 20, 14);
+        b.setMinHeight(64);
+        b.setMinimumHeight(64);
+        b.setMaxLines(2);
+        b.setSingleLine(false);
+        b.setGravity(Gravity.CENTER);
         b.setOnClickListener(v -> action.run());
         return b;
     }
@@ -79,10 +85,26 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         LinearLayout header = column();
-        header.setPadding(22, 20, 22, 18);
+        header.setPadding(16, 10, 22, 18);
         header.setBackgroundColor(Color.WHITE);
-        TextView brand = text("GASS-JOBS", 13, green, true);
-        header.addView(brand);
+        LinearLayout topBar = row();
+        TextView menuButton = text("⋮", 32, ink, true);
+        menuButton.setGravity(Gravity.CENTER);
+        menuButton.setContentDescription("Open menu");
+        menuButton.setBackground(shape(Color.rgb(242, 246, 248), 18));
+        LinearLayout.LayoutParams menuParams = new LinearLayout.LayoutParams(64, 64);
+        menuParams.setMargins(0, 0, 12, 0);
+        topBar.addView(menuButton, menuParams);
+        TextView brand = text("GASS-JOBS", 14, green, true);
+        topBar.addView(brand);
+        header.addView(topBar);
+        menuButton.setOnClickListener(v -> {
+            PopupMenu menu = new PopupMenu(MainActivity.this, menuButton);
+            menu.getMenu().add("Profile").setOnMenuItemClickListener(item -> { showProfile(); return true; });
+            menu.getMenu().add("Settings").setOnMenuItemClickListener(item -> { showSettings(); return true; });
+            menu.getMenu().add("About me").setOnMenuItemClickListener(item -> { showAbout(); return true; });
+            menu.show();
+        });
         space(header, 8);
         header.addView(text(title, 25, ink, true));
         header.addView(text(subtitle, 14, muted, false));
@@ -97,8 +119,8 @@ public class MainActivity extends Activity {
         LinearLayout nav = row();
         nav.setBackgroundColor(Color.WHITE);
         nav.setPadding(8, 8, 8, 8);
-        nav.addView(button("Emplois", false, this::showHome), new LinearLayout.LayoutParams(0, 48, 1));
-        nav.addView(button("Profil", false, this::showProfile), new LinearLayout.LayoutParams(0, 48, 1));
+        nav.addView(button("Emplois", false, this::showHome), new LinearLayout.LayoutParams(0, 64, 1));
+        nav.addView(button("Profil", false, this::showProfile), new LinearLayout.LayoutParams(0, 64, 1));
         root.addView(nav);
     }
 
@@ -124,9 +146,9 @@ public class MainActivity extends Activity {
         base("Trouvez votre prochain emploi", "Les opportunités près de chez vous, en Tunisie.");
         LinearLayout switcher = row();
         switcher.addView(button("Chercher un emploi", !employerMode, () -> { employerMode = false; showHome(); }),
-                new LinearLayout.LayoutParams(0, 48, 1));
+                new LinearLayout.LayoutParams(0, 64, 1));
         switcher.addView(button("Recruter", employerMode, () -> { employerMode = true; showHome(); }),
-                new LinearLayout.LayoutParams(0, 48, 1));
+                new LinearLayout.LayoutParams(0, 64, 1));
         content.addView(switcher);
         space(content, 18);
 
@@ -163,6 +185,24 @@ public class MainActivity extends Activity {
         space(content, 20);
         content.addView(text("Confidentialité d’abord", 17, ink, true));
         content.addView(text("Vos coordonnées et votre CV ne seront pas publiés sans votre accord. Les profils et les offres devront être protégés contre les faux comptes et les arnaques.", 14, muted, false));
+    }
+
+    private void showSettings() {
+        base("Settings", "Preferences for your GASS-JOBS experience.");
+        content.addView(text("Language and notifications", 19, ink, true));
+        space(content, 8);
+        content.addView(text("Language selection and notification controls will be available when account settings are connected.", 15, muted, false));
+        space(content, 18);
+        content.addView(button("Back to jobs", true, this::showHome));
+    }
+
+    private void showAbout() {
+        base("About me", "About GASS-JOBS.");
+        content.addView(text("GASS-JOBS helps people discover employment opportunities in Kasserine and across Tunisia.", 16, ink, false));
+        space(content, 12);
+        content.addView(text("This is an early demonstration build. Job listings and applications will be connected to verified sources and secure services in later releases.", 14, muted, false));
+        space(content, 18);
+        content.addView(button("Back to jobs", true, this::showHome));
     }
 
     private void showJob(String title, String company, String location, String description) {
