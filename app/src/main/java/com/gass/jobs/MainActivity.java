@@ -250,9 +250,11 @@ public class MainActivity extends Activity {
         if (employerMode) {
             content.addView(text("Vous recrutez ?", 21, ink, true));
             space(content, 8);
-            content.addView(text("Publiez une offre et aidez les talents de Kasserine et de toute la Tunisie à vous trouver.", 15, muted, false));
+            content.addView(text("Préparez une annonce pour les candidats de Kasserine et de toute la Tunisie. Votre brouillon reste uniquement sur cet appareil : il n'est pas publié ni transmis.", 14, muted, false));
             space(content, 14);
-            content.addView(button("Créer une offre (bientôt)", true, this::showNotice));
+            content.addView(button("Créer une offre", true, this::showEmployerDraft));
+            space(content, 10);
+            content.addView(button("Voir les sources officielles", false, () -> openExternal(MINISTRY_DIRECTORY)));
             return;
         }
 
@@ -408,6 +410,112 @@ public class MainActivity extends Activity {
         content.addView(button("Postuler (bientôt)", true, this::showNotice));
         space(content, 10);
         content.addView(button("Retour aux offres", false, this::showHome));
+    }
+
+    private EditText draftField(String hint, boolean multiline) {
+        EditText field = new EditText(this);
+        field.setHint(hint);
+        field.setTextSize(15);
+        field.setSingleLine(!multiline);
+        if (multiline) {
+            field.setMinLines(4);
+            field.setGravity(Gravity.TOP);
+        }
+        field.setPadding(14, 11, 14, 11);
+        field.setBackground(shape(Color.WHITE, 14));
+        return field;
+    }
+
+    private void showEmployerDraft() {
+        base("Préparer une offre", "Brouillon privé — non publié.");
+        content.addView(text("Titre du poste *", 13, muted, true));
+        EditText title = draftField("Ex. Technicien de maintenance", false);
+        content.addView(title, new LinearLayout.LayoutParams(-1, 52));
+        space(content, 10);
+        content.addView(text("Entreprise *", 13, muted, true));
+        EditText company = draftField("Nom de l'entreprise", false);
+        content.addView(company, new LinearLayout.LayoutParams(-1, 52));
+        space(content, 10);
+        content.addView(text("Gouvernorat *", 13, muted, true));
+        Spinner region = filterSpinner(new String[] {
+                "Kasserine", "Tunis", "Ariana", "Ben Arous", "Manouba", "Nabeul",
+                "Zaghouan", "Bizerte", "Béja", "Jendouba", "Le Kef", "Siliana",
+                "Kairouan", "Sidi Bouzid", "Sousse", "Monastir", "Mahdia", "Sfax",
+                "Gafsa", "Tozeur", "Kébili", "Gabès", "Médenine", "Tataouine"
+        });
+        content.addView(region, new LinearLayout.LayoutParams(-1, 48));
+        space(content, 10);
+        content.addView(text("Secteur", 13, muted, true));
+        Spinner sector = filterSpinner(new String[] {
+                "Commerce", "Agriculture", "Bâtiment", "Informatique", "Santé", "Transport", "Autre"
+        });
+        content.addView(sector, new LinearLayout.LayoutParams(-1, 48));
+        space(content, 10);
+        content.addView(text("Type de contrat", 13, muted, true));
+        Spinner contract = filterSpinner(new String[] {"CDI", "CDD", "Temps plein", "Temps partiel", "Saisonnier", "Stage"});
+        content.addView(contract, new LinearLayout.LayoutParams(-1, 48));
+        space(content, 10);
+        content.addView(text("Salaire (facultatif)", 13, muted, true));
+        EditText salary = draftField("Ex. 900–1200 TND / mois", false);
+        content.addView(salary, new LinearLayout.LayoutParams(-1, 52));
+        space(content, 10);
+        content.addView(text("Description et compétences *", 13, muted, true));
+        EditText description = draftField("Missions, expérience, compétences, horaires…", true);
+        content.addView(description, new LinearLayout.LayoutParams(-1, 116));
+        space(content, 14);
+        content.addView(text("Ne saisissez pas de données personnelles de candidats ici. Le brouillon est enregistré localement sur ce téléphone. La publication, la vérification de l'employeur et les candidatures seront activées après mise en place d'un backend sécurisé.", 12, muted, false));
+        space(content, 14);
+        content.addView(button("Enregistrer le brouillon sur ce téléphone", true, () -> {
+            String jobTitle = title.getText().toString().trim();
+            String employer = company.getText().toString().trim();
+            String details = description.getText().toString().trim();
+            if (jobTitle.isEmpty() || employer.isEmpty() || details.isEmpty()) {
+                Toast.makeText(this, "Complétez les champs obligatoires (*).", Toast.LENGTH_LONG).show();
+                return;
+            }
+            getSharedPreferences("gass_jobs_drafts", MODE_PRIVATE).edit()
+                    .putString("title", jobTitle)
+                    .putString("company", employer)
+                    .putString("governorate", selected(region))
+                    .putString("sector", selected(sector))
+                    .putString("contract", selected(contract))
+                    .putString("salary", salary.getText().toString().trim())
+                    .putString("description", details)
+                    .putLong("saved_at", System.currentTimeMillis())
+                    .apply();
+            Toast.makeText(this, "Brouillon enregistré sur cet appareil. Rien n'a été publié.", Toast.LENGTH_LONG).show();
+        }));
+        space(content, 10);
+        content.addView(button("Retour", false, this::showHome));
+        android.content.SharedPreferences saved = getSharedPreferences("gass_jobs_drafts", MODE_PRIVATE);
+        if (saved.contains("title")) {
+            space(content, 18);
+            content.addView(text("Dernier brouillon enregistré", 17, ink, true));
+            space(content, 5);
+            content.addView(text(saved.getString("title", "") + " — " + saved.getString("company", "") + " (" + saved.getString("governorate", "") + ")", 14, muted, false));
+            space(content, 8);
+            content.addView(button("Charger ce brouillon", false, () -> {
+                title.setText(saved.getString("title", ""));
+                company.setText(saved.getString("company", ""));
+                salary.setText(saved.getString("salary", ""));
+                description.setText(saved.getString("description", ""));
+                setSpinnerValue(region, saved.getString("governorate", "Kasserine"));
+                setSpinnerValue(sector, saved.getString("sector", "Commerce"));
+                setSpinnerValue(contract, saved.getString("contract", "CDI"));
+            }));
+            space(content, 8);
+            content.addView(button("Supprimer le brouillon", false, () -> {
+                saved.edit().clear().apply();
+                Toast.makeText(this, "Brouillon supprimé de cet appareil.", Toast.LENGTH_SHORT).show();
+                showEmployerDraft();
+            }));
+        }
+    }
+
+    private void setSpinnerValue(Spinner spinner, String value) {
+        ArrayAdapter adapter = (ArrayAdapter) spinner.getAdapter();
+        int position = adapter.getPosition(value);
+        if (position >= 0) spinner.setSelection(position);
     }
 
     private void showNotice() {
