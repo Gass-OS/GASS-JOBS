@@ -19,6 +19,8 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.HashSet;
+import java.util.Set;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
@@ -36,30 +38,32 @@ public class MainActivity extends Activity {
     private LinearLayout resultsContainer;
 
     private static class Job {
-        final String title, company, location, sector, contract, description;
-        Job(String title, String company, String location, String sector, String contract, String description) {
+        final String title, company, location, governorate, sector, contract, description;
+        Job(String title, String company, String location, String governorate, String sector, String contract, String description) {
             this.title = title;
             this.company = company;
             this.location = location;
+            this.governorate = governorate;
             this.sector = sector;
             this.contract = contract;
             this.description = description;
         }
+        String key() { return title + "|" + company + "|" + location; }
     }
 
     // Fictional examples used only to demonstrate the search UI.
     private final List<Job> demoJobs = new ArrayList<Job>() {{
-        add(new Job("Agent commercial", "Entreprise de démonstration", "Kasserine", "Commerce", "Temps plein",
+        add(new Job("Agent commercial", "Entreprise de démonstration", "Kasserine", "Kasserine", "Commerce", "Temps plein",
                 "Relation client, prospection et suivi commercial. Expérience souhaitée."));
-        add(new Job("Technicien informatique", "Entreprise de démonstration", "Sbeitla", "Informatique", "CDI",
+        add(new Job("Technicien informatique", "Entreprise de démonstration", "Sbeitla", "Kasserine", "Informatique", "CDI",
                 "Assistance informatique, maintenance et support aux utilisateurs."));
-        add(new Job("Ouvrier agricole", "Exploitation de démonstration", "Fériana", "Agriculture", "Saisonnier",
+        add(new Job("Ouvrier agricole", "Exploitation de démonstration", "Fériana", "Kasserine", "Agriculture", "Saisonnier",
                 "Travaux agricoles. Débutants acceptés, formation sur place."));
-        add(new Job("Électricien bâtiment", "Société fictive", "Kairouan", "Bâtiment", "CDD",
+        add(new Job("Électricien bâtiment", "Société fictive", "Kairouan", "Kairouan", "Bâtiment", "CDD",
                 "Installation électrique et maintenance sur chantiers. Exemple fictif."));
-        add(new Job("Aide-soignant", "Centre de démonstration", "Sfax", "Santé", "Temps plein",
+        add(new Job("Aide-soignant", "Centre de démonstration", "Sfax", "Sfax", "Santé", "Temps plein",
                 "Accompagnement des patients et aide aux soins. Exemple fictif."));
-        add(new Job("Chauffeur-livreur", "Entreprise fictive", "Tunis", "Transport", "CDI",
+        add(new Job("Chauffeur-livreur", "Entreprise fictive", "Tunis", "Tunis", "Transport", "CDI",
                 "Livraison locale et suivi des commandes. Exemple fictif."));
     }};
 
@@ -157,21 +161,39 @@ public class MainActivity extends Activity {
         root.addView(nav);
     }
 
-    private void card(String title, String company, String location, String type, String description) {
+    private void card(Job job) {
         LinearLayout c = column();
         c.setPadding(17, 15, 17, 15);
         c.setBackground(shape(Color.WHITE, 18));
-        c.addView(text(title, 18, ink, true));
+        c.addView(text(job.title, 18, ink, true));
         space(c, 5);
-        c.addView(text(company + "  •  " + location, 13, muted, false));
+        c.addView(text(job.company + "  •  " + job.location + " (" + job.governorate + ")", 13, muted, false));
         space(c, 10);
-        c.addView(text(type, 12, green, true));
+        c.addView(text(job.sector + " • " + job.contract, 12, green, true));
         space(c, 8);
-        c.addView(text(description, 14, ink, false));
+        c.addView(text(job.description, 14, ink, false));
         space(c, 12);
-        c.addView(button("Voir l'offre", true, () -> showJob(title, company, location, description)));
+        LinearLayout actions = row();
+        actions.addView(button("Voir l'offre", true, () -> showJob(job.title, job.company, job.location, job.description)),
+                new LinearLayout.LayoutParams(0, 46, 1));
+        Set<String> saved = new HashSet<String>(getSharedPreferences("gass_jobs_saved", MODE_PRIVATE)
+                .getStringSet("keys", new HashSet<String>()));
+        boolean isSaved = saved.contains(job.key());
+        actions.addView(button(isSaved ? "Enregistré ✓" : "Enregistrer", false, () -> toggleSaved(job)),
+                new LinearLayout.LayoutParams(0, 46, 1));
+        c.addView(actions);
         content.addView(c);
         space(content, 12);
+    }
+
+    private void toggleSaved(Job job) {
+        android.content.SharedPreferences prefs = getSharedPreferences("gass_jobs_saved", MODE_PRIVATE);
+        Set<String> saved = new HashSet<String>(prefs.getStringSet("keys", new HashSet<String>()));
+        if (saved.contains(job.key())) saved.remove(job.key());
+        else saved.add(job.key());
+        prefs.edit().putStringSet("keys", saved).apply();
+        if (resultsContainer != null && content == resultsContainer) renderJobs();
+        Toast.makeText(this, saved.contains(job.key()) ? "Offre enregistrée." : "Offre retirée des favoris.", Toast.LENGTH_SHORT).show();
     }
 
     private void infoCard(String title, String detail, String actionLabel, Runnable action) {
@@ -218,13 +240,13 @@ public class MainActivity extends Activity {
 
         int count = 0;
         for (Job job : demoJobs) {
-            String searchable = (job.title + " " + job.company + " " + job.location + " "
+            String searchable = (job.title + " " + job.company + " " + job.location + " " + job.governorate + " "
                     + job.sector + " " + job.contract + " " + job.description).toLowerCase(Locale.ROOT);
             if (!query.isEmpty() && !searchable.contains(query)) continue;
-            if (!"Tous".equals(governorate) && !job.location.equalsIgnoreCase(governorate)) continue;
+            if (!"Tous".equals(governorate) && !job.governorate.equalsIgnoreCase(governorate)) continue;
             if (!"Tous".equals(sector) && !job.sector.equalsIgnoreCase(sector)) continue;
             if (!"Tous".equals(contract) && !job.contract.equalsIgnoreCase(contract)) continue;
-            card(job.title, job.company, job.location, job.sector + " • " + job.contract, job.description);
+            card(job);
             count++;
         }
         if (count == 0) {
@@ -390,7 +412,23 @@ public class MainActivity extends Activity {
     }
 
     private void showProfile() {
-        base("Votre espace", "Un profil simple pour préparer votre recherche.");
+        base("Votre espace", "Vos offres enregistrées sur cet appareil.");
+        content.addView(text("Mes offres sauvegardées", 20, ink, true));
+        Set<String> saved = new HashSet<String>(getSharedPreferences("gass_jobs_saved", MODE_PRIVATE)
+                .getStringSet("keys", new HashSet<String>()));
+        int savedCount = 0;
+        for (Job job : demoJobs) {
+            if (saved.contains(job.key())) {
+                infoCard(job.title, job.company + " • " + job.location + " (" + job.governorate + ")", "Voir l'offre", () ->
+                        showJob(job.title, job.company, job.location, job.description));
+                savedCount++;
+            }
+        }
+        if (savedCount == 0) {
+            space(content, 8);
+            content.addView(text("Aucune offre sauvegardée. Utilisez « Enregistrer » sur une annonce pour la retrouver ici.", 14, muted, false));
+        }
+        space(content, 18);
         content.addView(text("Candidat ou recruteur", 20, ink, true));
         space(content, 8);
         content.addView(text("La création de compte, l'ajout de photo, le CV et le numéro de téléphone seront activés avec un système sécurisé.", 15, muted, false));
