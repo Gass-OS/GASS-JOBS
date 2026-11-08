@@ -4,6 +4,8 @@
 
 ## Current Android MVP
 - TUN-JOBS app display name (Android package remains `com.gass.jobs` to preserve update compatibility).
+- Top-left navigation menu with Profile, Settings, About, official sources and regional offices.
+- Larger employment-office action buttons and candidate/employer form controls.
 - First-launch welcome screen with job-seeker and employer entry choices.
 - Candidate profile editor for name, phone, email, governorate, experience, education, skills, availability, profile photo and CV document selection. Profile data and selected file references stay on-device; nothing is uploaded.
 - Larger employment-office contact cards, buttons and tap targets.
