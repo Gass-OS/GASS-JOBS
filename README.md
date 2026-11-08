@@ -7,7 +7,8 @@
 - Switch between job-seeker and employer journeys.
 - View job details.
 - Open the official employment-office directory from the bottom navigation.
-- Kasserine regional employment directorate contact, sourced from the Ministry of Employment's regional directory.
+- Regional employment directorate contacts for all 24 governorates, with Kasserine displayed first, sourced from the Ministry of Employment's official directory.
+- Tap-to-call and tap-to-email actions for published regional contact details.
 - Direct links to the Ministry's regional directory and the national open-data dataset.
 - Source notes and dates, including a warning that the open-data CSV/XLSX records were last updated in March 2023.
 - Build a debug APK automatically with GitHub Actions.
@@ -21,7 +22,7 @@ https://catalog.data.gov.tn/fr/dataset/reseau-de-bureaux-de-l-emploi-et-du-trava
 
 The catalogue identifies annual updates, but the underlying resource records were last updated on 7 March 2023 and list a 2016–2019 coverage period. Do not treat those records as current without revalidation. Attribute the Ministry as producer, link to the dataset, and preserve update dates.
 
-The current app displays the Kasserine regional directorate's published contact, not individual addresses for all three local employment offices. Those local office records must be verified separately before being shown as current.
+The app displays regional directorate contacts, not the individual addresses of every local employment office. For Kasserine, the Ministry says there are three employment offices, but their separate addresses and phone numbers must be verified before being shown.
 
 ## Important
 The current job listings are demonstration data. No real applications, accounts, CV uploads, or personal contact details are collected yet. Those features require a secure backend, consent and privacy controls, and moderation.
