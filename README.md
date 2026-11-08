@@ -7,6 +7,7 @@
 - Employer offer form with required-field validation and private on-device draft save/load/delete; drafts are not uploaded or published.
 - Browse clearly labelled demonstration job opportunities.
 - Save and remove favourite listings locally, and review saved listings from the Profile tab.
+- Filter by the actual governorate rather than the town name, so Sbeitla and Fériana listings are included under Kasserine.
 - Filter by governorate using the listing's actual governorate (including Sbeitla and Fériana under Kasserine).
 - Switch between job-seeker and employer journeys.
 - View job details.
