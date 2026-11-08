@@ -17,6 +17,7 @@ import android.widget.Spinner;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.ImageView;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -42,6 +43,8 @@ public class MainActivity extends Activity {
     private Runnable pendingScreenAction;
     private boolean pendingRootScreen;
     private boolean restoringScreen;
+    private static final int PICK_PROFILE_PHOTO = 7101;
+    private static final int PICK_PROFILE_CV = 7102;
 
     private static class Job {
         final String title, company, location, governorate, sector, contract, description;
@@ -80,7 +83,8 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        showHome();
+        if (getSharedPreferences("tun_jobs", MODE_PRIVATE).getBoolean("welcome_done", false)) showHome();
+        else showWelcome();
     }
 
     private void prepareScreen(boolean rootScreen, Runnable action) {
@@ -97,7 +101,7 @@ public class MainActivity extends Activity {
             return;
         }
         new AlertDialog.Builder(this)
-                .setTitle("Quitter GASS-JOBS ?")
+                .setTitle("Quitter TUN-JOBS ?")
                 .setMessage("Voulez-vous vraiment fermer l'application ?")
                 .setNegativeButton("Annuler", (dialog, which) -> dialog.dismiss())
                 .setPositiveButton("Quitter", (dialog, which) -> finish())
@@ -143,10 +147,10 @@ public class MainActivity extends Activity {
         Button b = new Button(this);
         b.setText(label);
         b.setAllCaps(false);
-        b.setTextSize(14);
+        b.setTextSize(15);
         b.setTextColor(primary ? Color.WHITE : ink);
         b.setBackground(shape(primary ? green : Color.rgb(232, 238, 242), 24));
-        b.setPadding(12, 5, 12, 5);
+        b.setPadding(14, 8, 14, 8);
         b.setOnClickListener(v -> action.run());
         return b;
     }
@@ -176,7 +180,7 @@ public class MainActivity extends Activity {
         LinearLayout header = column();
         header.setPadding(22, 20, 22, 18);
         header.setBackgroundColor(Color.WHITE);
-        header.addView(text("GASS-JOBS", 13, green, true));
+        header.addView(text("TUN-JOBS", 15, green, true));
         space(header, 8);
         header.addView(text(title, 25, ink, true));
         header.addView(text(subtitle, 14, muted, false));
@@ -212,7 +216,7 @@ public class MainActivity extends Activity {
         space(c, 12);
         LinearLayout actions = row();
         actions.addView(button("Voir l'offre", true, () -> showJob(job.title, job.company, job.location, job.description)),
-                new LinearLayout.LayoutParams(0, 46, 1));
+                new LinearLayout.LayoutParams(0, 56, 1));
         Set<String> saved = new HashSet<String>(getSharedPreferences("gass_jobs_saved", MODE_PRIVATE)
                 .getStringSet("keys", new HashSet<String>()));
         boolean isSaved = saved.contains(job.key());
@@ -469,9 +473,120 @@ public class MainActivity extends Activity {
         content.addView(button("Ouvrir le jeu de données officiel", false, () -> openExternal(OPEN_DATA_DIRECTORY)));
     }
 
+    private EditText profileField(String hint, String value) {
+        EditText field = new EditText(this);
+        field.setSingleLine(true);
+        field.setTextSize(16);
+        field.setHint(hint);
+        field.setText(value);
+        field.setPadding(16, 12, 16, 12);
+        field.setBackground(shape(Color.WHITE, 14));
+        return field;
+    }
+
+    private void pickProfileFile(int requestCode, String mime) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType(mime);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(intent, requestCode);
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        Uri uri = data.getData();
+        try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
+        catch (Exception ignored) { }
+        android.content.SharedPreferences.Editor edit = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
+        if (requestCode == PICK_PROFILE_PHOTO) edit.putString("photo_uri", uri.toString());
+        if (requestCode == PICK_PROFILE_CV) edit.putString("cv_uri", uri.toString());
+        edit.apply();
+        showProfile();
+    }
+
+    private void showWelcome() {
+        prepareScreen(true, this::showWelcome);
+        base("Bienvenue sur TUN-JOBS", "L'emploi et le recrutement, partout en Tunisie.");
+        space(content, 26);
+        content.addView(text("Votre prochain emploi peut commencer ici.", 27, ink, true));
+        space(content, 12);
+        content.addView(text("Trouvez des opportunités près de chez vous, consultez les sources officielles et préparez votre profil candidat. Les employeurs peuvent aussi préparer leurs offres.", 16, muted, false));
+        space(content, 26);
+        content.addView(button("Je cherche un emploi", true, () -> {
+            getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
+            employerMode = false;
+            showHome();
+        }), new LinearLayout.LayoutParams(-1, 60));
+        space(content, 12);
+        content.addView(button("Je propose un emploi", false, () -> {
+            getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
+            employerMode = true;
+            showHome();
+        }), new LinearLayout.LayoutParams(-1, 60));
+        space(content, 22);
+        content.addView(text("TUN-JOBS — Une plateforme tunisienne pour rapprocher candidats et employeurs.", 13, muted, false));
+    }
+
     private void showProfile() {
         prepareScreen(true, this::showProfile);
-        base("Votre espace", "Vos offres enregistrées sur cet appareil.");
+        base("Mon profil", "Préparez vos informations de candidat sur cet appareil.");
+        android.content.SharedPreferences p = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
+        content.addView(text("Informations personnelles", 20, ink, true));
+        space(content, 8);
+        ImageView photo = new ImageView(this);
+        photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        photo.setBackground(shape(Color.WHITE, 18));
+        String photoUri = p.getString("photo_uri", "");
+        if (!photoUri.isEmpty()) {
+            try { photo.setImageURI(Uri.parse(photoUri)); } catch (Exception ignored) { }
+        }
+        LinearLayout.LayoutParams photoParams = new LinearLayout.LayoutParams(112, 112);
+        photoParams.gravity = Gravity.CENTER_HORIZONTAL;
+        content.addView(photo, photoParams);
+        space(content, 8);
+        content.addView(button("Ajouter / modifier ma photo", false, () -> pickProfileFile(PICK_PROFILE_PHOTO, "image/*")),
+                new LinearLayout.LayoutParams(-1, 56));
+        space(content, 14);
+
+        EditText name = profileField("Nom et prénom", p.getString("name", ""));
+        EditText phone = profileField("Téléphone", p.getString("phone", ""));
+        EditText email = profileField("Adresse e-mail", p.getString("email", ""));
+        EditText city = profileField("Ville / gouvernorat", p.getString("city", "Kasserine"));
+        EditText experience = profileField("Expérience et métier recherché", p.getString("experience", ""));
+        EditText education = profileField("Formation / diplôme", p.getString("education", ""));
+        EditText skills = profileField("Compétences", p.getString("skills", ""));
+        EditText availability = profileField("Disponibilité", p.getString("availability", ""));
+        EditText[] fields = {name, phone, email, city, experience, education, skills, availability};
+        String[] labels = {"Nom et prénom *", "Téléphone *", "E-mail", "Ville / gouvernorat", "Expérience / métier recherché", "Formation / diplôme", "Compétences", "Disponibilité"};
+        for (int i=0;i<fields.length;i++) {
+            content.addView(text(labels[i], 14, muted, true));
+            space(content, 4);
+            content.addView(fields[i], new LinearLayout.LayoutParams(-1, 58));
+            space(content, 10);
+        }
+
+        String cvUri = p.getString("cv_uri", "");
+        content.addView(text(cvUri.isEmpty() ? "Aucun CV sélectionné" : "CV ajouté : " + Uri.parse(cvUri).getLastPathSegment(), 14, muted, false));
+        space(content, 6);
+        content.addView(button("Joindre mon CV (PDF ou document)", false, () -> pickProfileFile(PICK_PROFILE_CV, "application/pdf")),
+                new LinearLayout.LayoutParams(-1, 56));
+        space(content, 14);
+        content.addView(button("Enregistrer mon profil sur ce téléphone", true, () -> {
+            if (name.getText().toString().trim().isEmpty() || phone.getText().toString().trim().isEmpty()) {
+                Toast.makeText(this, "Le nom et le téléphone sont obligatoires.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            android.content.SharedPreferences.Editor e = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
+            String[] keys = {"name","phone","email","city","experience","education","skills","availability"};
+            for (int i=0;i<fields.length;i++) e.putString(keys[i], fields[i].getText().toString().trim());
+            e.putBoolean("profile_saved", true).apply();
+            Toast.makeText(this, "Profil enregistré uniquement sur cet appareil.", Toast.LENGTH_LONG).show();
+        }), new LinearLayout.LayoutParams(-1, 60));
+        space(content, 8);
+        content.addView(text("Confidentialité : vos informations, votre photo et votre CV restent sur ce téléphone. Ils ne sont pas envoyés ni publiés. Le partage avec les employeurs sera activé uniquement après mise en place d'un service sécurisé et avec votre accord.", 13, muted, false));
+
+        space(content, 22);
         content.addView(text("Mes offres sauvegardées", 20, ink, true));
         Set<String> saved = new HashSet<String>(getSharedPreferences("gass_jobs_saved", MODE_PRIVATE)
                 .getStringSet("keys", new HashSet<String>()));
@@ -483,21 +598,7 @@ public class MainActivity extends Activity {
                 savedCount++;
             }
         }
-        if (savedCount == 0) {
-            space(content, 8);
-            content.addView(text("Aucune offre sauvegardée. Utilisez « Enregistrer » sur une annonce pour la retrouver ici.", 14, muted, false));
-        }
-        space(content, 18);
-        content.addView(text("Candidat ou recruteur", 20, ink, true));
-        space(content, 8);
-        content.addView(text("La création de compte, l'ajout de photo, le CV et le numéro de téléphone seront activés avec un système sécurisé.", 15, muted, false));
-        space(content, 18);
-        content.addView(button("Je cherche un emploi", true, () -> { employerMode = false; showHome(); }));
-        space(content, 10);
-        content.addView(button("Je propose un emploi", false, () -> { employerMode = true; showHome(); }));
-        space(content, 20);
-        content.addView(text("Confidentialité d'abord", 17, ink, true));
-        content.addView(text("Vos coordonnées et votre CV ne seront pas publiés sans votre accord. Les profils et les offres devront être protégés contre les faux comptes et les arnaques.", 14, muted, false));
+        if (savedCount == 0) content.addView(text("Aucune offre sauvegardée pour le moment.", 14, muted, false));
     }
 
     private void showJob(String title, String company, String location, String description) {
