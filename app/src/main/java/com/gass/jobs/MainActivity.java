@@ -45,6 +45,8 @@ public class MainActivity extends Activity {
     private boolean restoringScreen;
     private static final int PICK_PROFILE_PHOTO = 7101;
     private static final int PICK_PROFILE_CV = 7102;
+    private ImageView profilePhotoView;
+    private TextView profileCvLabel;
 
     private static class Job {
         final String title, company, location, governorate, sector, contract, description;
@@ -488,7 +490,10 @@ public class MainActivity extends Activity {
     private void pickProfileFile(int requestCode, String mime) {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType(mime);
+        if (requestCode == PICK_PROFILE_CV) {
+            intent.setType("*/*");
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] {"application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+        } else intent.setType(mime);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         startActivityForResult(intent, requestCode);
     }
@@ -503,7 +508,9 @@ public class MainActivity extends Activity {
         if (requestCode == PICK_PROFILE_PHOTO) edit.putString("photo_uri", uri.toString());
         if (requestCode == PICK_PROFILE_CV) edit.putString("cv_uri", uri.toString());
         edit.apply();
-        showProfile();
+        if (requestCode == PICK_PROFILE_PHOTO && profilePhotoView != null) profilePhotoView.setImageURI(uri);
+        if (requestCode == PICK_PROFILE_CV && profileCvLabel != null) profileCvLabel.setText("CV ajouté : " + uri.getLastPathSegment());
+        Toast.makeText(this, requestCode == PICK_PROFILE_PHOTO ? "Photo sélectionnée." : "CV sélectionné.", Toast.LENGTH_SHORT).show();
     }
 
     private void showWelcome() {
@@ -536,6 +543,7 @@ public class MainActivity extends Activity {
         content.addView(text("Informations personnelles", 20, ink, true));
         space(content, 8);
         ImageView photo = new ImageView(this);
+        profilePhotoView = photo;
         photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
         photo.setBackground(shape(Color.WHITE, 18));
         String photoUri = p.getString("photo_uri", "");
@@ -568,7 +576,8 @@ public class MainActivity extends Activity {
         }
 
         String cvUri = p.getString("cv_uri", "");
-        content.addView(text(cvUri.isEmpty() ? "Aucun CV sélectionné" : "CV ajouté : " + Uri.parse(cvUri).getLastPathSegment(), 14, muted, false));
+        profileCvLabel = text(cvUri.isEmpty() ? "Aucun CV sélectionné" : "CV ajouté : " + Uri.parse(cvUri).getLastPathSegment(), 14, muted, false);
+        content.addView(profileCvLabel);
         space(content, 6);
         content.addView(button("Joindre mon CV (PDF ou document)", false, () -> pickProfileFile(PICK_PROFILE_CV, "application/pdf")),
                 new LinearLayout.LayoutParams(-1, 56));
