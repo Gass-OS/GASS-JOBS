@@ -6,6 +6,7 @@
 - Custom GASS-JOBS launcher icon (native Android vector drawable).
 - Employer offer form with required-field validation and private on-device draft save/load/delete; drafts are not uploaded or published.
 - Browse clearly labelled demonstration job opportunities.
+- Open official Tunisian employment portals (ANETI, public-service competitions, Ministry of Employment and Interior Ministry recruitment) without scraping or republishing their notices.
 - Save and remove favourite listings locally, and review saved listings from the Profile tab.
 - Filter by the actual governorate rather than the town name, so Sbeitla and Fériana listings are included under Kasserine.
 - Filter by governorate using the listing's actual governorate (including Sbeitla and Fériana under Kasserine).
