@@ -3,6 +3,8 @@
 **GASS-JOBS** is a native Android employment platform starting with Kasserine and expanding across Tunisia.
 
 ## Current Android MVP
+- Custom GASS-JOBS launcher icon (native Android vector drawable).
+- Employer offer form with required-field validation and private on-device draft save/load/delete; drafts are not uploaded or published.
 - Browse clearly labelled demonstration job opportunities.
 - Switch between job-seeker and employer journeys.
 - View job details.
