@@ -70,9 +70,9 @@ public class MainActivity extends Activity {
         b.setTextColor(primary ? Color.WHITE : ink);
         b.setBackground(shape(primary ? green : Color.rgb(232, 238, 242), 24));
         b.setPadding(20, 14, 20, 14);
-        b.setMinHeight(64);
-        b.setMinimumHeight(64);
-        b.setMaxLines(2);
+        b.setMinHeight(76);
+        b.setMinimumHeight(76);
+        b.setMaxLines(3);
         b.setSingleLine(false);
         b.setGravity(Gravity.CENTER);
         b.setOnClickListener(v -> action.run());
@@ -119,8 +119,8 @@ public class MainActivity extends Activity {
         LinearLayout nav = row();
         nav.setBackgroundColor(Color.WHITE);
         nav.setPadding(8, 8, 8, 8);
-        nav.addView(button("Emplois", false, this::showHome), new LinearLayout.LayoutParams(0, 64, 1));
-        nav.addView(button("Profil", false, this::showProfile), new LinearLayout.LayoutParams(0, 64, 1));
+        nav.addView(button("Emplois", false, this::showHome), new LinearLayout.LayoutParams(0, -2, 1));
+        nav.addView(button("Profil", false, this::showProfile), new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(nav);
     }
 
@@ -146,9 +146,9 @@ public class MainActivity extends Activity {
         base("Trouvez votre prochain emploi", "Les opportunités près de chez vous, en Tunisie.");
         LinearLayout switcher = row();
         switcher.addView(button("Chercher un emploi", !employerMode, () -> { employerMode = false; showHome(); }),
-                new LinearLayout.LayoutParams(0, 64, 1));
+                new LinearLayout.LayoutParams(0, -2, 1));
         switcher.addView(button("Recruter", employerMode, () -> { employerMode = true; showHome(); }),
-                new LinearLayout.LayoutParams(0, 64, 1));
+                new LinearLayout.LayoutParams(0, -2, 1));
         content.addView(switcher);
         space(content, 18);
 
