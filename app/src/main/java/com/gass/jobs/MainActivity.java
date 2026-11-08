@@ -33,6 +33,7 @@ public class MainActivity extends Activity {
     private Spinner governorateFilter;
     private Spinner sectorFilter;
     private Spinner contractFilter;
+    private LinearLayout resultsContainer;
 
     private static class Job {
         final String title, company, location, sector, contract, description;
@@ -201,7 +202,10 @@ public class MainActivity extends Activity {
     }
 
     private void renderJobs() {
-        content.removeAllViews();
+        if (resultsContainer == null) return;
+        resultsContainer.removeAllViews();
+        LinearLayout previousContent = content;
+        content = resultsContainer;
         String query = searchInput.getText().toString().trim().toLowerCase(Locale.ROOT);
         String governorate = selected(governorateFilter);
         String sector = selected(sectorFilter);
@@ -228,6 +232,7 @@ public class MainActivity extends Activity {
         } else {
             content.addView(text(count + " résultat(s)", 12, muted, false));
         }
+        content = previousContent;
     }
 
     private void showHome() {
@@ -298,6 +303,8 @@ public class MainActivity extends Activity {
         }), new LinearLayout.LayoutParams(0, 48, 1));
         content.addView(filterActions);
         space(content, 18);
+        resultsContainer = column();
+        content.addView(resultsContainer);
         renderJobs();
     }
 
