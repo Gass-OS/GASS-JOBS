@@ -1,6 +1,7 @@
 package com.gass.jobs;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -36,6 +37,11 @@ public class MainActivity extends Activity {
     private Spinner sectorFilter;
     private Spinner contractFilter;
     private LinearLayout resultsContainer;
+    private final ArrayList<Runnable> screenHistory = new ArrayList<Runnable>();
+    private Runnable currentScreenAction;
+    private Runnable pendingScreenAction;
+    private boolean pendingRootScreen;
+    private boolean restoringScreen;
 
     private static class Job {
         final String title, company, location, governorate, sector, contract, description;
@@ -75,6 +81,27 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         showHome();
+    }
+
+    private void prepareScreen(boolean rootScreen, Runnable action) {
+        pendingRootScreen = rootScreen;
+        pendingScreenAction = action;
+    }
+
+    @Override public void onBackPressed() {
+        if (!screenHistory.isEmpty()) {
+            Runnable previous = screenHistory.remove(screenHistory.size() - 1);
+            restoringScreen = true;
+            previous.run();
+            restoringScreen = false;
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Quitter GASS-JOBS ?")
+                .setMessage("Voulez-vous vraiment fermer l'application ?")
+                .setNegativeButton("Annuler", (dialog, which) -> dialog.dismiss())
+                .setPositiveButton("Quitter", (dialog, which) -> finish())
+                .show();
     }
 
     private GradientDrawable shape(int color, int radius) {
@@ -133,6 +160,15 @@ public class MainActivity extends Activity {
     }
 
     private void base(String title, String subtitle) {
+        if (pendingRootScreen) {
+            screenHistory.clear();
+        } else if (!restoringScreen && currentScreenAction != null) {
+            screenHistory.add(currentScreenAction);
+        }
+        if (pendingScreenAction != null) currentScreenAction = pendingScreenAction;
+        pendingScreenAction = null;
+        pendingRootScreen = false;
+
         root = column();
         root.setBackgroundColor(canvas);
         setContentView(root);
@@ -259,6 +295,7 @@ public class MainActivity extends Activity {
     }
 
     private void showHome() {
+        prepareScreen(true, this::showHome);
         base("Trouvez votre prochain emploi", "Les opportunités près de chez vous, en Tunisie.");
         LinearLayout switcher = row();
         switcher.addView(button("Chercher un emploi", !employerMode, () -> { employerMode = false; showHome(); }),
@@ -336,6 +373,7 @@ public class MainActivity extends Activity {
     }
 
     private void showOfficialSources() {
+        prepareScreen(true, this::showOfficialSources);
         base("Offres officielles en Tunisie", "Accès direct aux portails publics — sans copie ni republication des annonces.");
         content.addView(text("Consultez les annonces directement sur les sites officiels. Les disponibilités, conditions et dates limites sont celles publiées par chaque organisme.", 14, muted, false));
         space(content, 16);
@@ -378,6 +416,7 @@ public class MainActivity extends Activity {
     }
 
     private void showEmploymentOffices() {
+        prepareScreen(true, this::showEmploymentOffices);
         base("Emploi dans les régions", "Directions régionales — les 24 gouvernorats.");
         content.addView(text("KASSERINE EN PREMIER", 13, green, true));
         space(content, 6);
@@ -431,6 +470,7 @@ public class MainActivity extends Activity {
     }
 
     private void showProfile() {
+        prepareScreen(true, this::showProfile);
         base("Votre espace", "Vos offres enregistrées sur cet appareil.");
         content.addView(text("Mes offres sauvegardées", 20, ink, true));
         Set<String> saved = new HashSet<String>(getSharedPreferences("gass_jobs_saved", MODE_PRIVATE)
@@ -461,6 +501,7 @@ public class MainActivity extends Activity {
     }
 
     private void showJob(String title, String company, String location, String description) {
+        prepareScreen(false, () -> showJob(title, company, location, description));
         base(title, company + " • " + location);
         content.addView(text(description, 16, ink, false));
         space(content, 18);
@@ -484,6 +525,7 @@ public class MainActivity extends Activity {
     }
 
     private void showEmployerDraft() {
+        prepareScreen(false, this::showEmployerDraft);
         base("Préparer une offre", "Brouillon privé — non publié.");
         content.addView(text("Titre du poste *", 13, muted, true));
         EditText title = draftField("Ex. Technicien de maintenance", false);
@@ -576,6 +618,7 @@ public class MainActivity extends Activity {
     }
 
     private void showNotice() {
+        prepareScreen(false, this::showNotice);
         base("Fonction en préparation", "Cette première version est une base de démonstration.");
         content.addView(text("Les candidatures, comptes et publications seront ajoutés après la mise en place du backend sécurisé.", 15, muted, false));
         space(content, 14);
