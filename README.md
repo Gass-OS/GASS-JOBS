@@ -6,6 +6,8 @@
 - Custom GASS-JOBS launcher icon (native Android vector drawable).
 - Employer offer form with required-field validation and private on-device draft save/load/delete; drafts are not uploaded or published.
 - Browse clearly labelled demonstration job opportunities.
+- Save and remove favourite listings locally, and review saved listings from the Profile tab.
+- Filter by governorate using the listing's actual governorate (including Sbeitla and Fériana under Kasserine).
 - Switch between job-seeker and employer journeys.
 - View job details.
 - Open the official employment-office directory from the bottom navigation.
