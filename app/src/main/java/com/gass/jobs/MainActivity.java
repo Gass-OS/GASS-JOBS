@@ -24,7 +24,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        showHome();
+        showWelcome();
     }
 
     private GradientDrawable shape(int color, int radius) {
@@ -85,15 +85,18 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         LinearLayout header = column();
-        header.setPadding(16, 10, 22, 18);
+        header.setPadding(32, 18, 24, 18);
         header.setBackgroundColor(Color.WHITE);
         LinearLayout topBar = row();
-        TextView menuButton = text("⋮", 32, ink, true);
+        TextView menuButton = text("⋮", 34, ink, true);
         menuButton.setGravity(Gravity.CENTER);
-        menuButton.setContentDescription("Open menu");
-        menuButton.setBackground(shape(Color.rgb(242, 246, 248), 18));
-        LinearLayout.LayoutParams menuParams = new LinearLayout.LayoutParams(64, 64);
-        menuParams.setMargins(0, 0, 12, 0);
+        menuButton.setContentDescription("Open navigation menu");
+        menuButton.setBackground(shape(Color.rgb(232, 241, 238), 22));
+        menuButton.setClickable(true);
+        menuButton.setFocusable(true);
+        menuButton.setPadding(0, 0, 0, 0);
+        LinearLayout.LayoutParams menuParams = new LinearLayout.LayoutParams(80, 80);
+        menuParams.setMargins(8, 4, 18, 4);
         topBar.addView(menuButton, menuParams);
         TextView brand = text("GASS-JOBS", 14, green, true);
         topBar.addView(brand);
@@ -140,6 +143,29 @@ public class MainActivity extends Activity {
         c.addView(button("Voir l’offre", true, () -> showJob(title, company, location, description)));
         content.addView(c);
         space(content, 12);
+    }
+
+    private void showWelcome() {
+        base("Bienvenue sur GASS-JOBS", "Votre passerelle vers l’emploi à Kasserine et partout en Tunisie.");
+        space(content, 24);
+        TextView mark = text("GASS-JOBS", 30, green, true);
+        mark.setGravity(Gravity.CENTER);
+        content.addView(mark, new LinearLayout.LayoutParams(-1, -2));
+        space(content, 16);
+        TextView intro = text("Trouvez des opportunités près de chez vous. Consultez les offres, préparez votre profil ou publiez vos besoins de recrutement.", 17, ink, false);
+        intro.setGravity(Gravity.CENTER);
+        content.addView(intro);
+        space(content, 28);
+        content.addView(button("Découvrir les offres d’emploi", true, this::showHome));
+        space(content, 14);
+        content.addView(button("Je suis recruteur — proposer un emploi", false, () -> {
+            employerMode = true;
+            showHome();
+        }));
+        space(content, 14);
+        TextView note = text("Simple • Local • Pour toute la Tunisie", 13, muted, false);
+        note.setGravity(Gravity.CENTER);
+        content.addView(note);
     }
 
     private void showHome() {
