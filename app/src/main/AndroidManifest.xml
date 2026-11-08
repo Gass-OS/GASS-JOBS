@@ -2,6 +2,8 @@
     <application
         android:allowBackup="false"
         android:label="GASS-JOBS"
+        android:icon="@drawable/ic_gass_jobs"
+        android:roundIcon="@drawable/ic_gass_jobs"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity
