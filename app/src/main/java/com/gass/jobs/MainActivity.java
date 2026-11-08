@@ -192,7 +192,7 @@ public class MainActivity extends Activity {
         if (saved.contains(job.key())) saved.remove(job.key());
         else saved.add(job.key());
         prefs.edit().putStringSet("keys", saved).apply();
-        if (resultsContainer != null && content == resultsContainer) renderJobs();
+        if (resultsContainer != null) renderJobs();
         Toast.makeText(this, saved.contains(job.key()) ? "Offre enregistrée." : "Offre retirée des favoris.", Toast.LENGTH_SHORT).show();
     }
 
