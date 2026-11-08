@@ -1,9 +1,12 @@
-# GASS-JOBS
+# TUN-JOBS
 
-**GASS-JOBS** is a native Android employment platform starting with Kasserine and expanding across Tunisia.
+**TUN-JOBS** is a native Android employment platform starting with Kasserine and expanding across Tunisia.
 
 ## Current Android MVP
-- Custom GASS-JOBS launcher icon (native Android vector drawable).
+- TUN-JOBS app display name (Android package remains `com.gass.jobs` to preserve update compatibility).
+- First-launch welcome screen with job-seeker and employer entry choices.
+- Candidate profile editor for name, phone, email, governorate, experience, education, skills, availability, profile photo and CV document selection. Profile data and selected file references stay on-device; nothing is uploaded.
+- Larger employment-office contact cards, buttons and tap targets.
 - Employer offer form with required-field validation and private on-device draft save/load/delete; drafts are not uploaded or published.
 - Browse clearly labelled demonstration job opportunities.
 - Open official Tunisian employment portals (ANETI, public-service competitions, Ministry of Employment and Interior Ministry recruitment) without scraping or republishing their notices.
@@ -31,7 +34,7 @@ The catalogue identifies annual updates, but the underlying resource records wer
 The app displays regional directorate contacts, not the individual addresses of every local employment office. For Kasserine, the Ministry says there are three employment offices, but their separate addresses and phone numbers must be verified before being shown.
 
 ## Important
-The current job listings are demonstration data. No real applications, accounts, CV uploads, or personal contact details are collected yet. Those features require a secure backend, consent and privacy controls, and moderation.
+The current job listings are demonstration data. No real applications, online accounts, or server-side CV uploads are available yet. Candidate profile fields and document references are stored locally on the device only. Those features require a secure backend, consent and privacy controls, and moderation.
 
 Do not scrape or republish government vacancy listings unless an official API/feed or written reuse permission has been confirmed. Prefer direct links to official vacancy notices until then. Each imported vacancy must retain its original source, publication date, deadline, and last verification date.
 
