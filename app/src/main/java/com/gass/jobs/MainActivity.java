@@ -9,10 +9,16 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Spinner;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
@@ -23,6 +29,38 @@ public class MainActivity extends Activity {
     private LinearLayout root;
     private LinearLayout content;
     private boolean employerMode = false;
+    private EditText searchInput;
+    private Spinner governorateFilter;
+    private Spinner sectorFilter;
+    private Spinner contractFilter;
+
+    private static class Job {
+        final String title, company, location, sector, contract, description;
+        Job(String title, String company, String location, String sector, String contract, String description) {
+            this.title = title;
+            this.company = company;
+            this.location = location;
+            this.sector = sector;
+            this.contract = contract;
+            this.description = description;
+        }
+    }
+
+    // Fictional examples used only to demonstrate the search UI.
+    private final List<Job> demoJobs = new ArrayList<Job>() {{
+        add(new Job("Agent commercial", "Entreprise de démonstration", "Kasserine", "Commerce", "Temps plein",
+                "Relation client, prospection et suivi commercial. Expérience souhaitée."));
+        add(new Job("Technicien informatique", "Entreprise de démonstration", "Sbeitla", "Informatique", "CDI",
+                "Assistance informatique, maintenance et support aux utilisateurs."));
+        add(new Job("Ouvrier agricole", "Exploitation de démonstration", "Fériana", "Agriculture", "Saisonnier",
+                "Travaux agricoles. Débutants acceptés, formation sur place."));
+        add(new Job("Électricien bâtiment", "Société fictive", "Kairouan", "Bâtiment", "CDD",
+                "Installation électrique et maintenance sur chantiers. Exemple fictif."));
+        add(new Job("Aide-soignant", "Centre de démonstration", "Sfax", "Santé", "Temps plein",
+                "Accompagnement des patients et aide aux soins. Exemple fictif."));
+        add(new Job("Chauffeur-livreur", "Entreprise fictive", "Tunis", "Transport", "CDI",
+                "Livraison locale et suivi des commandes. Exemple fictif."));
+    }};
 
     private static final String MINISTRY_DIRECTORY =
             "https://www.emploi.gov.tn/fr/93/directions-regionales-de-formation-professionnelle-et-de-lemploi";
@@ -148,6 +186,50 @@ public class MainActivity extends Activity {
         space(content, 12);
     }
 
+    private Spinner filterSpinner(String[] values) {
+        Spinner spinner = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(
+                this, android.R.layout.simple_spinner_item, values);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(adapter);
+        return spinner;
+    }
+
+    private String selected(Spinner spinner) {
+        Object value = spinner.getSelectedItem();
+        return value == null ? "Tous" : value.toString();
+    }
+
+    private void renderJobs() {
+        content.removeAllViews();
+        String query = searchInput.getText().toString().trim().toLowerCase(Locale.ROOT);
+        String governorate = selected(governorateFilter);
+        String sector = selected(sectorFilter);
+        String contract = selected(contractFilter);
+
+        content.addView(text("Résultats de démonstration", 20, ink, true));
+        space(content, 5);
+        content.addView(text("Ces exemples sont fictifs : aucune candidature réelle n'est possible pour le moment.", 12, muted, false));
+        space(content, 12);
+
+        int count = 0;
+        for (Job job : demoJobs) {
+            String searchable = (job.title + " " + job.company + " " + job.location + " "
+                    + job.sector + " " + job.contract + " " + job.description).toLowerCase(Locale.ROOT);
+            if (!query.isEmpty() && !searchable.contains(query)) continue;
+            if (!"Tous".equals(governorate) && !job.location.equalsIgnoreCase(governorate)) continue;
+            if (!"Tous".equals(sector) && !job.sector.equalsIgnoreCase(sector)) continue;
+            if (!"Tous".equals(contract) && !job.contract.equalsIgnoreCase(contract)) continue;
+            card(job.title, job.company, job.location, job.sector + " • " + job.contract, job.description);
+            count++;
+        }
+        if (count == 0) {
+            content.addView(text("Aucune offre ne correspond à ces filtres.", 15, muted, false));
+        } else {
+            content.addView(text(count + " résultat(s)", 12, muted, false));
+        }
+    }
+
     private void showHome() {
         base("Trouvez votre prochain emploi", "Les opportunités près de chez vous, en Tunisie.");
         LinearLayout switcher = row();
@@ -169,16 +251,54 @@ public class MainActivity extends Activity {
             return;
         }
 
-        content.addView(text("Offres à découvrir", 21, ink, true));
-        space(content, 5);
-        content.addView(text("Exemples de démonstration — les offres ne sont pas encore vérifiées.", 12, muted, false));
-        space(content, 14);
-        card("Agent commercial", "Entreprise de démonstration", "Kasserine", "Temps plein",
-                "Relation client, prospection et suivi commercial. Expérience souhaitée.");
-        card("Technicien informatique", "Entreprise de démonstration", "Sbeitla", "CDI",
-                "Assistance informatique, maintenance et support aux utilisateurs.");
-        card("Ouvrier agricole", "Exploitation de démonstration", "Fériana", "Saisonnier",
-                "Travaux agricoles. Débutants acceptés, formation sur place.");
+        content.addView(text("Rechercher une offre", 20, ink, true));
+        space(content, 8);
+        searchInput = new EditText(this);
+        searchInput.setSingleLine(true);
+        searchInput.setTextSize(15);
+        searchInput.setHint("Métier, mot-clé ou entreprise");
+        searchInput.setPadding(14, 10, 14, 10);
+        searchInput.setBackground(shape(Color.WHITE, 14));
+        content.addView(searchInput, new LinearLayout.LayoutParams(-1, 52));
+        space(content, 10);
+
+        content.addView(text("Gouvernorat", 13, muted, true));
+        governorateFilter = filterSpinner(new String[] {
+                "Tous", "Kasserine", "Tunis", "Ariana", "Ben Arous", "Manouba", "Nabeul",
+                "Zaghouan", "Bizerte", "Béja", "Jendouba", "Le Kef", "Siliana", "Kairouan",
+                "Sidi Bouzid", "Sousse", "Monastir", "Mahdia", "Sfax", "Gafsa", "Tozeur",
+                "Kébili", "Gabès", "Médenine", "Tataouine"
+        });
+        content.addView(governorateFilter, new LinearLayout.LayoutParams(-1, 48));
+        space(content, 6);
+
+        content.addView(text("Secteur", 13, muted, true));
+        sectorFilter = filterSpinner(new String[] {
+                "Tous", "Agriculture", "Bâtiment", "Commerce", "Informatique", "Santé", "Transport"
+        });
+        content.addView(sectorFilter, new LinearLayout.LayoutParams(-1, 48));
+        space(content, 6);
+
+        content.addView(text("Type de contrat", 13, muted, true));
+        contractFilter = filterSpinner(new String[] {
+                "Tous", "CDI", "CDD", "Temps plein", "Saisonnier"
+        });
+        content.addView(contractFilter, new LinearLayout.LayoutParams(-1, 48));
+        space(content, 12);
+
+        LinearLayout filterActions = row();
+        filterActions.addView(button("Rechercher", true, this::renderJobs),
+                new LinearLayout.LayoutParams(0, 48, 1));
+        filterActions.addView(button("Effacer", false, () -> {
+            searchInput.setText("");
+            governorateFilter.setSelection(0);
+            sectorFilter.setSelection(0);
+            contractFilter.setSelection(0);
+            renderJobs();
+        }), new LinearLayout.LayoutParams(0, 48, 1));
+        content.addView(filterActions);
+        space(content, 18);
+        renderJobs();
     }
 
     private void officeCard(String governorate, String director, String address, String phone, String email) {
