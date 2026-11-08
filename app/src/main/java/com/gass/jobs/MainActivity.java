@@ -395,28 +395,29 @@ public class MainActivity extends Activity {
 
     private void officeCard(String governorate, String director, String address, String phone, String email) {
         LinearLayout c = column();
-        c.setPadding(16, 14, 16, 14);
+        c.setPadding(18, 18, 18, 18);
         c.setBackground(shape(Color.WHITE, 18));
-        c.addView(text(governorate, 17, ink, true));
-        space(c, 4);
-        c.addView(text("Responsable : " + director, 13, green, true));
-        space(c, 6);
-        c.addView(text(address, 13, muted, false));
-        c.addView(text("Téléphone : " + phone, 13, muted, false));
+        c.addView(text(governorate, 19, ink, true));
+        space(c, 7);
+        c.addView(text("Responsable : " + director, 15, green, true));
+        space(c, 8);
+        c.addView(text(address, 15, muted, false));
+        c.addView(text("Téléphone : " + phone, 15, muted, false));
         if (email != null && !email.isEmpty()) {
-            c.addView(text("E-mail : " + email, 13, muted, false));
+            c.addView(text("E-mail : " + email, 15, muted, false));
         }
-        space(c, 10);
+        space(c, 14);
         LinearLayout actions = row();
+        actions.setGravity(Gravity.CENTER_VERTICAL);
         actions.addView(button("Appeler", true, () -> openExternal("tel:" + phone.replace(" ", ""))),
-                new LinearLayout.LayoutParams(0, 46, 1));
+                new LinearLayout.LayoutParams(0, 58, 1));
         if (email != null && !email.isEmpty()) {
             actions.addView(button("E-mail", false, () -> openExternal("mailto:" + email)),
-                    new LinearLayout.LayoutParams(0, 46, 1));
+                    new LinearLayout.LayoutParams(0, 58, 1));
         }
         c.addView(actions);
         content.addView(c);
-        space(content, 10);
+        space(content, 16);
     }
 
     private void showEmploymentOffices() {
