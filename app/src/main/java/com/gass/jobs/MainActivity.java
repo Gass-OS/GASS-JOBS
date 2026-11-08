@@ -182,7 +182,13 @@ public class MainActivity extends Activity {
         LinearLayout header = column();
         header.setPadding(22, 20, 22, 18);
         header.setBackgroundColor(Color.WHITE);
-        header.addView(text("TUN-JOBS", 15, green, true));
+        LinearLayout brandRow = row();
+        brandRow.addView(button("☰", false, this::showMenu), new LinearLayout.LayoutParams(52, 48));
+        TextView brand = text("TUN-JOBS", 17, green, true);
+        LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(0, 48, 1);
+        brandParams.leftMargin = 10;
+        brandRow.addView(brand, brandParams);
+        header.addView(brandRow);
         space(header, 8);
         header.addView(text(title, 25, ink, true));
         header.addView(text(subtitle, 14, muted, false));
@@ -223,7 +229,7 @@ public class MainActivity extends Activity {
                 .getStringSet("keys", new HashSet<String>()));
         boolean isSaved = saved.contains(job.key());
         actions.addView(button(isSaved ? "Enregistré ✓" : "Enregistrer", false, () -> toggleSaved(job)),
-                new LinearLayout.LayoutParams(0, 46, 1));
+                new LinearLayout.LayoutParams(0, 56, 1));
         c.addView(actions);
         content.addView(c);
         space(content, 12);
@@ -378,6 +384,74 @@ public class MainActivity extends Activity {
         renderJobs();
     }
 
+    private void showMenu() {
+        prepareScreen(false, this::showMenu);
+        base("Menu TUN-JOBS", "Accès rapide à votre espace et aux réglages.");
+        LinearLayout banner = column();
+        banner.setPadding(20, 22, 20, 22);
+        banner.setBackground(shape(Color.rgb(22, 35, 52), 18));
+        banner.addView(text("TUN-JOBS", 25, Color.WHITE, true));
+        space(banner, 6);
+        banner.addView(text("EMPLOI • RECRUTEMENT • TUNISIE", 13, Color.rgb(180, 218, 205), true));
+        space(banner, 8);
+        banner.addView(text("GASS-OS  •  BY AYMEN GHARSALLI", 13, Color.WHITE, false));
+        content.addView(banner);
+        space(content, 18);
+        content.addView(button("⌂   Emplois", false, this::showHome), new LinearLayout.LayoutParams(-1, 58));
+        space(content, 8);
+        content.addView(button("♙   Mon profil", false, this::showProfile), new LinearLayout.LayoutParams(-1, 58));
+        space(content, 8);
+        content.addView(button("⚙   Paramètres", false, this::showSettings), new LinearLayout.LayoutParams(-1, 58));
+        space(content, 8);
+        content.addView(button("ⓘ   À propos", false, this::showAboutMe), new LinearLayout.LayoutParams(-1, 58));
+        space(content, 8);
+        content.addView(button("Sites officiels de l'emploi", false, this::showOfficialSources), new LinearLayout.LayoutParams(-1, 58));
+        space(content, 8);
+        content.addView(button("Bureaux régionaux", false, this::showEmploymentOffices), new LinearLayout.LayoutParams(-1, 58));
+    }
+
+    private void showSettings() {
+        prepareScreen(false, this::showSettings);
+        base("Paramètres", "Préférences de TUN-JOBS sur cet appareil.");
+        android.content.SharedPreferences prefs = getSharedPreferences("tun_jobs", MODE_PRIVATE);
+        content.addView(text("Langue de l'application", 20, ink, true));
+        space(content, 8);
+        content.addView(text("La traduction complète en arabe, français et anglais sera ajoutée progressivement. Pour le moment, l'interface principale reste en français.", 15, muted, false));
+        space(content, 16);
+        content.addView(text("Confidentialité", 18, ink, true));
+        space(content, 6);
+        content.addView(text("Votre profil, votre photo, votre CV et les brouillons d'offres sont enregistrés localement. Cette version ne possède pas encore de compte en ligne ni de synchronisation serveur.", 14, muted, false));
+        space(content, 16);
+        content.addView(button("Réafficher l'écran de bienvenue au prochain lancement", false, () -> {
+            prefs.edit().putBoolean("welcome_done", false).apply();
+            Toast.makeText(this, "L'écran de bienvenue sera affiché au prochain lancement.", Toast.LENGTH_LONG).show();
+        }), new LinearLayout.LayoutParams(-1, 58));
+        space(content, 10);
+        content.addView(button("Retour aux emplois", true, this::showHome), new LinearLayout.LayoutParams(-1, 58));
+    }
+
+    private void showAboutMe() {
+        prepareScreen(false, this::showAboutMe);
+        base("À propos", "Qui sommes-nous ?");
+        LinearLayout banner = column();
+        banner.setPadding(20, 22, 20, 22);
+        banner.setBackground(shape(Color.rgb(22, 35, 52), 18));
+        banner.addView(text("TUN-JOBS", 28, Color.WHITE, true));
+        space(banner, 8);
+        banner.addView(text("Une plateforme tunisienne pour rapprocher les candidats et les employeurs.", 16, Color.WHITE, false));
+        content.addView(banner);
+        space(content, 18);
+        content.addView(text("Créé par GASS-OS", 20, green, true));
+        space(content, 6);
+        content.addView(text("Conçu par Aymen Gharsalli. Notre objectif est de faciliter l'accès aux opportunités d'emploi à Kasserine et dans les 24 gouvernorats de Tunisie.", 15, muted, false));
+        space(content, 16);
+        content.addView(text("Version de démonstration", 17, ink, true));
+        space(content, 6);
+        content.addView(text("Les annonces visibles actuellement sont des exemples fictifs. Les portails publics s'ouvrent directement sur leurs sites officiels. Les comptes, candidatures et publications en ligne nécessitent encore un service sécurisé.", 14, muted, false));
+        space(content, 18);
+        content.addView(button("Retour", true, this::showMenu), new LinearLayout.LayoutParams(-1, 58));
+    }
+
     private void showOfficialSources() {
         prepareScreen(true, this::showOfficialSources);
         base("Offres officielles en Tunisie", "Accès direct aux portails publics — sans copie ni republication des annonces.");
@@ -479,7 +553,8 @@ public class MainActivity extends Activity {
     private EditText profileField(String hint, String value) {
         EditText field = new EditText(this);
         field.setSingleLine(true);
-        field.setTextSize(16);
+        field.setTextSize(17);
+        field.setMinHeight(64);
         field.setHint(hint);
         field.setText(value);
         field.setPadding(16, 12, 16, 12);
@@ -624,13 +699,14 @@ public class MainActivity extends Activity {
     private EditText draftField(String hint, boolean multiline) {
         EditText field = new EditText(this);
         field.setHint(hint);
-        field.setTextSize(15);
+        field.setTextSize(17);
+        field.setMinHeight(multiline ? 132 : 62);
         field.setSingleLine(!multiline);
         if (multiline) {
             field.setMinLines(4);
             field.setGravity(Gravity.TOP);
         }
-        field.setPadding(14, 11, 14, 11);
+        field.setPadding(18, 15, 18, 15);
         field.setBackground(shape(Color.WHITE, 14));
         return field;
     }
