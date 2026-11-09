@@ -2,7 +2,7 @@ name: GASS-JOBS Android APK
 
 on:
   push:
-    branches: [main, feature/android-mvp]
+    branches: [main, feature/android-mvp, integration/official-directory-into-mvp-20261109]
   workflow_dispatch:
 
 permissions:
