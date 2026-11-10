@@ -150,6 +150,7 @@ public class MainActivity extends Activity {
         b.setText(label);
         b.setAllCaps(false);
         b.setTextSize(14);
+        b.setIncludeFontPadding(true);
         b.setMinHeight(0);
         b.setMinimumHeight(0);
         b.setMaxLines(2);
@@ -228,10 +229,19 @@ public class MainActivity extends Activity {
         LinearLayout nav = row();
         nav.setBackgroundColor(Color.WHITE);
         nav.setPadding(4, 3, 4, 3);
-        nav.addView(button("Emplois", false, this::showHome), new LinearLayout.LayoutParams(0, 48, 1));
-        nav.addView(button("Sources", false, this::showOfficialSources), new LinearLayout.LayoutParams(0, 48, 1));
-        nav.addView(button("Bureaux", false, this::showEmploymentOffices), new LinearLayout.LayoutParams(0, 48, 1));
-        nav.addView(button("Profil", false, this::showProfile), new LinearLayout.LayoutParams(0, 48, 1));
+        Button jobsTab = button("Emplois", false, this::showHome);
+        Button sourcesTab = button("Sources", false, this::showOfficialSources);
+        Button officesTab = button("Bureaux", false, this::showEmploymentOffices);
+        Button profileTab = button("Profil", false, this::showProfile);
+        for (Button tab : new Button[] {jobsTab, sourcesTab, officesTab, profileTab}) {
+            tab.setTextSize(12);
+            tab.setMaxLines(1);
+            tab.setPadding(2, 2, 2, 2);
+        }
+        nav.addView(jobsTab, new LinearLayout.LayoutParams(0, 46, 1));
+        nav.addView(sourcesTab, new LinearLayout.LayoutParams(0, 46, 1));
+        nav.addView(officesTab, new LinearLayout.LayoutParams(0, 46, 1));
+        nav.addView(profileTab, new LinearLayout.LayoutParams(0, 46, 1));
         root.addView(nav);
     }
 
@@ -578,11 +588,14 @@ public class MainActivity extends Activity {
     private EditText profileField(String hint, String value) {
         EditText field = new EditText(this);
         field.setSingleLine(true);
-        field.setTextSize(17);
-        field.setMinHeight(64);
+        field.setTextSize(16);
+        field.setMinHeight(0);
+        field.setMinimumHeight(0);
+        field.setIncludeFontPadding(true);
+        field.setGravity(Gravity.CENTER_VERTICAL);
         field.setHint(hint);
         field.setText(value);
-        field.setPadding(16, 12, 16, 12);
+        field.setPadding(16, 6, 16, 6);
         field.setBackground(shape(Color.WHITE, 14));
         return field;
     }
@@ -608,7 +621,10 @@ public class MainActivity extends Activity {
         if (requestCode == PICK_PROFILE_PHOTO) edit.putString("photo_uri", uri.toString());
         if (requestCode == PICK_PROFILE_CV) edit.putString("cv_uri", uri.toString());
         edit.apply();
-        if (requestCode == PICK_PROFILE_PHOTO && profilePhotoView != null) profilePhotoView.setImageURI(uri);
+        if (requestCode == PICK_PROFILE_PHOTO && profilePhotoView != null) {
+            profilePhotoView.clearColorFilter();
+            profilePhotoView.setImageURI(uri);
+        }
         if (requestCode == PICK_PROFILE_CV && profileCvLabel != null) profileCvLabel.setText("CV ajouté : " + uri.getLastPathSegment());
         Toast.makeText(this, requestCode == PICK_PROFILE_PHOTO ? "Photo sélectionnée." : "CV sélectionné.", Toast.LENGTH_SHORT).show();
     }
@@ -649,6 +665,10 @@ public class MainActivity extends Activity {
         String photoUri = p.getString("photo_uri", "");
         if (!photoUri.isEmpty()) {
             try { photo.setImageURI(Uri.parse(photoUri)); } catch (Exception ignored) { }
+        } else {
+            photo.setImageResource(android.R.drawable.ic_menu_camera);
+            photo.setColorFilter(muted);
+            photo.setContentDescription("Photo de profil non sélectionnée");
         }
         LinearLayout.LayoutParams photoParams = new LinearLayout.LayoutParams(112, 112);
         photoParams.gravity = Gravity.CENTER_HORIZONTAL;
@@ -671,7 +691,7 @@ public class MainActivity extends Activity {
         for (int i=0;i<fields.length;i++) {
             content.addView(text(labels[i], 14, muted, true));
             space(content, 4);
-            content.addView(fields[i], new LinearLayout.LayoutParams(-1, 58));
+            content.addView(fields[i], new LinearLayout.LayoutParams(-1, 64));
             space(content, 10);
         }
 
