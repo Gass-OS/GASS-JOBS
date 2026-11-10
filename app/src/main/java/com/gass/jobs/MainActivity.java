@@ -1511,24 +1511,91 @@ public class MainActivity extends Activity {
 
     private void showAboutMe() {
         prepareScreen(false, this::showAboutMe);
-        base("À propos", "Qui sommes-nous ?");
+        base("À propos", "Le développeur, la mission et les projets GASS-OS");
         LinearLayout banner = column();
         banner.setPadding(dp(20), dp(22), dp(20), dp(22));
         banner.setBackground(shape(Color.rgb(22, 35, 52), 18));
         banner.addView(text("TUN-JOBS", 28, Color.WHITE, true));
         space(banner, 8);
         banner.addView(text("Une plateforme tunisienne pour rapprocher les candidats et les employeurs.", 16, Color.WHITE, false));
+        banner.setOnClickListener(v -> showLongDescription("TUN-JOBS", "TUN-JOBS est une plateforme mobile pensée pour rapprocher les demandeurs d'emploi, les recruteurs et les sources officielles en Tunisie. Elle met l'accent sur un accès simple aux opportunités, les profils professionnels, la découverte des offres et une expérience mobile moderne."));
+        banner.setOnLongClickListener(v -> { showLongDescription("TUN-JOBS", "TUN-JOBS est une plateforme mobile pensée pour rapprocher les demandeurs d'emploi, les recruteurs et les sources officielles en Tunisie. Elle met l'accent sur un accès simple aux opportunités, les profils professionnels, la découverte des offres et une expérience mobile moderne."); return true; });
         content.addView(banner);
+        space(content, 20);
+
+        content.addView(text("DÉVELOPPEUR & FONDATEUR", 13, gold, true));
+        space(content, 7);
+        content.addView(text("Aymen Gharsalli", 25, ink, true));
+        space(content, 5);
+        TextView role = text("Fondateur de GASS-OS • Développeur indépendant • Créateur de solutions Android, Linux et de jeux vidéo.", 15, muted, false);
+        role.setOnLongClickListener(v -> { showLongDescription("À propos du développeur", "Aymen Gharsalli est un développeur indépendant et le fondateur de GASS-OS. Son travail explore les applications Android, les environnements Linux mobiles, les outils logiciels et les jeux vidéo. Il développe des projets pratiques avec une attention particulière à l'autonomie, aux performances, à l'accessibilité et à une expérience utilisateur soignée. TUN-JOBS s'inscrit dans cette démarche : construire une passerelle numérique utile entre les talents et les employeurs en Tunisie."); return true; });
+        content.addView(role);
+        space(content, 10);
+        content.addView(text("GASS-OS conçoit des applications et expériences numériques : outils mobiles, solutions Linux, plateformes de services et jeux interactifs. L'objectif est de créer des produits utiles, modernes et accessibles, en privilégiant le contrôle de l'utilisateur, la transparence et le développement progressif.", 15, muted, false));
         space(content, 18);
-        content.addView(text("Créé par GASS-OS", 20, green, true));
-        space(content, 6);
-        content.addView(text("Conçu par Aymen Gharsalli. Notre objectif est de faciliter l'accès aux opportunités d'emploi à Kasserine et dans les 24 gouvernorats de Tunisie.", 15, muted, false));
-        space(content, 16);
-        content.addView(text("Version de démonstration", 17, ink, true));
-        space(content, 6);
-        content.addView(text("Les annonces visibles actuellement sont des exemples fictifs. Les portails publics s'ouvrent directement sur leurs sites officiels. Les comptes, candidatures et publications en ligne nécessitent encore un service sécurisé.", 14, muted, false));
+
+        content.addView(text("ME RETROUVER EN LIGNE", 13, gold, true));
+        space(content, 9);
+        addSocialLink("⌘   GitHub — GASS-OS", "https://github.com/Gass-OS");
+        addSocialLink("▶   YouTube — Luxtrust OS", "https://www.youtube.com/@Luxtrust-Os");
+        addSocialLink("f   Facebook", "https://www.facebook.com/BMENLUXIII");
+        addSocialLink("✉   gharsalli1994@gmail.com", "mailto:gharsalli1994@gmail.com");
         space(content, 18);
-        content.addView(button("Retour", true, this::showMenu), new LinearLayout.LayoutParams(-1, dp(58)));
+
+        content.addView(text("MES PROJETS", 22, ink, true));
+        space(content, 5);
+        content.addView(text("Touchez une carte pour ouvrir le projet. Maintenez votre doigt appuyé pour lire sa description détaillée. Les liens APK ouvrent les builds et téléchargements publiés par chaque projet.", 14, muted, false));
+        space(content, 12);
+        addPortfolioCard("GASS-NATIVE", "Environnement Linux mobile basé sur Debian, avec une expérience de bureau XFCE sur Android.", "GASS-NATIVE est un projet visant à rendre les outils Linux accessibles depuis Android. Il s'appuie sur Debian et XFCE dans un environnement mobile, avec une approche légère et contrôlée par l'utilisateur.", "https://github.com/Gass-OS/GassNative-", "https://github.com/Gass-OS/GassNative-/actions");
+        addPortfolioCard("WINE-HUB", "Laboratoire Android pour les applications Windows et les technologies de compatibilité graphique.", "WINE-HUB rassemble un environnement de compatibilité Windows sur Android autour de Wine, DXVK et des pilotes graphiques compatibles. Le projet explore les performances et l'intégration des applications Windows sur appareils mobiles.", "https://github.com/Gass-OS/WINE-HUB", "https://github.com/Gass-OS/WINE-HUB/actions");
+        addPortfolioCard("KASSERINE CITY", "Jeu mobile 3D inspiré de Kasserine, avec exploration urbaine et missions.", "Kasserine City est un jeu 3D mobile qui met en scène une ville inspirée de Kasserine. Le projet développe progressivement ses quartiers, ses lieux emblématiques, ses personnages, ses missions et son cycle jour/nuit.", "https://github.com/Gass-OS/Kasserine-City", "https://github.com/Gass-OS/Kasserine-City/actions");
+        addPortfolioCard("LONG NIGHT", "Jeu d'horreur et de survie mobile avec exploration, ambiance nocturne et créatures.", "Long Night est une expérience d'horreur et de survie développée pour Android, avec une progression scénarisée, des environnements sombres, des personnages, des chiens et des mécaniques de furtivité et de survie.", "https://github.com/Gass-OS/long-night", "https://github.com/Gass-OS/long-night/actions");
+        addPortfolioCard("TUN-JOBS", "Plateforme tunisienne de découverte d'emplois et de mise en relation candidats-employeurs.", "TUN-JOBS est l'application présentée ici. Elle rassemble les profils candidats, les offres, les sources officielles et les outils de contact dans une interface mobile pensée pour la Tunisie.", "https://github.com/Gass-OS/GASS-JOBS", "https://github.com/Gass-OS/GASS-JOBS/actions/workflows/android.yml");
+        space(content, 12);
+        content.addView(text("CONTACT & COLLABORATION", 13, gold, true));
+        space(content, 7);
+        content.addView(button("Envoyer un e-mail", true, () -> openExternal("mailto:gharsalli1994@gmail.com?subject=Contact%20GASS-OS")), new LinearLayout.LayoutParams(-1, dp(56)));
+        space(content, 18);
+        content.addView(button("Retour", false, this::showMenu), new LinearLayout.LayoutParams(-1, dp(58)));
+    }
+
+    private void addSocialLink(String label, String url) {
+        Button link = button(label + "   ↗", false, () -> openExternal(url));
+        link.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        link.setOnLongClickListener(v -> { showLongDescription("Lien de contact", label + "\\n\\n" + url + "\\n\\nTouchez pour ouvrir ce lien dans votre application ou navigateur."); return true; });
+        content.addView(link, new LinearLayout.LayoutParams(-1, dp(54)));
+        space(content, 7);
+    }
+
+    private void addPortfolioCard(String title, String summary, String details, String sourceUrl, String buildsUrl) {
+        LinearLayout card = column();
+        card.setPadding(dp(17), dp(16), dp(17), dp(16));
+        card.setBackground(shape(Color.rgb(24, 34, 49), 18));
+        TextView name = text(title, 19, Color.WHITE, true);
+        card.addView(name);
+        space(card, 6);
+        card.addView(text(summary, 14, Color.rgb(194, 201, 213), false));
+        space(card, 12);
+        LinearLayout actions = row();
+        actions.setGravity(Gravity.CENTER_VERTICAL);
+        actions.addView(button("Projet ↗", true, () -> openExternal(sourceUrl)),
+                new LinearLayout.LayoutParams(0, dp(48), 1));
+        hspace(actions, 8);
+        actions.addView(button("APK / Builds ↗", false, () -> openExternal(buildsUrl)),
+                new LinearLayout.LayoutParams(0, dp(48), 1));
+        card.addView(actions);
+        card.setOnClickListener(v -> openExternal(sourceUrl));
+        card.setOnLongClickListener(v -> { showLongDescription(title, details + "\\n\\nProjet : " + sourceUrl + "\\nBuilds APK : " + buildsUrl); return true; });
+        content.addView(card, new LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));
+        space(content, 12);
+    }
+
+    private void showLongDescription(String title, String details) {
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(details)
+                .setPositiveButton("Fermer", (dialog, which) -> dialog.dismiss())
+                .show();
     }
 
     private void showOfficialSources() {
