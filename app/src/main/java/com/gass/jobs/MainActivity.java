@@ -27,10 +27,12 @@ import java.util.Set;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
-    private final int ink = Color.rgb(22, 35, 52);
-    private final int muted = Color.rgb(104, 119, 135);
-    private final int green = Color.rgb(0, 145, 105);
-    private final int canvas = Color.rgb(246, 248, 250);
+    private final int ink = Color.rgb(245, 246, 250);
+    private final int muted = Color.rgb(171, 178, 190);
+    private final int green = Color.rgb(245, 178, 35);
+    private final int canvas = Color.rgb(10, 11, 14);
+    private final int panel = Color.rgb(25, 27, 33);
+    private final int gold = Color.rgb(255, 190, 45);
     private LinearLayout root;
     private LinearLayout content;
     private boolean employerMode = false;
@@ -160,8 +162,11 @@ public class MainActivity extends Activity {
         b.setSingleLine(false);
         b.setIncludeFontPadding(false);
         b.setGravity(Gravity.CENTER);
-        b.setTextColor(primary ? Color.WHITE : ink);
-        b.setBackground(shape(primary ? green : Color.rgb(232, 238, 242), 24));
+        b.setTextColor(primary ? Color.rgb(20, 20, 22) : ink);
+        b.setBackground(primary
+                ? new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                    new int[] {Color.rgb(255, 204, 75), Color.rgb(222, 145, 8)})
+                : shape(Color.rgb(39, 41, 47), 24));
         b.setPadding(8, 3, 8, 3);
         b.setOnClickListener(v -> action.run());
         return b;
@@ -192,8 +197,8 @@ public class MainActivity extends Activity {
         // Android 15+ draws edge-to-edge by default for targetSdk 35.
         // Reserve the status/navigation bar areas so the header and bottom tabs
         // remain fully visible on gesture-navigation and cutout devices.
-        getWindow().setStatusBarColor(Color.WHITE);
-        getWindow().setNavigationBarColor(Color.WHITE);
+        getWindow().setStatusBarColor(canvas);
+        getWindow().setNavigationBarColor(canvas);
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -203,15 +208,15 @@ public class MainActivity extends Activity {
 
         LinearLayout header = column();
         header.setPadding(16, 8, 16, 12);
-        header.setBackgroundColor(Color.WHITE);
+        header.setBackgroundColor(Color.rgb(8, 9, 12));
         LinearLayout brandRow = row();
-        Button menuButton = button("⋮", false, this::showMenu);
-        menuButton.setTextSize(30);
+        Button menuButton = button("☰", false, this::showMenu);
+        menuButton.setTextSize(25);
         menuButton.setContentDescription("Open navigation menu");
         menuButton.setMinHeight(48);
         menuButton.setMinimumHeight(48);
         brandRow.addView(menuButton, new LinearLayout.LayoutParams(56, 52));
-        TextView brand = text("TUN-JOBS", 18, green, true);
+        TextView brand = text("TUN-JOBS", 25, gold, true);
         LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(0, 52, 1);
         brandParams.leftMargin = 10;
         brandRow.addView(brand, brandParams);
@@ -230,35 +235,37 @@ public class MainActivity extends Activity {
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
         LinearLayout nav = row();
-        nav.setBackgroundColor(Color.WHITE);
-        nav.setPadding(4, 3, 4, 3);
-        Button jobsTab = button("Emplois", false, this::showHome);
-        Button sourcesTab = button("Sources", false, this::showOfficialSources);
-        Button officesTab = button("Bureaux", false, this::showEmploymentOffices);
-        Button profileTab = button("Profil", false, this::showProfile);
-        for (Button tab : new Button[] {jobsTab, sourcesTab, officesTab, profileTab}) {
-            tab.setTextSize(12);
-            tab.setMaxLines(1);
-            tab.setPadding(2, 2, 2, 2);
+        nav.setBackgroundColor(Color.rgb(12, 13, 17));
+        nav.setPadding(3, 5, 3, 5);
+        Button jobsTab = button("⌂  Accueil", true, this::showHome);
+        Button offersTab = button("▣  Offres", false, this::showHome);
+        Button officesTab = button("⌖  Kasserine", false, this::showEmploymentOffices);
+        Button trainingTab = button("◇  Formation", false, this::showOfficialSources);
+        Button profileTab = button("⚙  Profil / Plus", false, this::showMenu);
+        for (Button tab : new Button[] {jobsTab, offersTab, officesTab, trainingTab, profileTab}) {
+            tab.setTextSize(10);
+            tab.setMaxLines(2);
+            tab.setPadding(1, 2, 1, 2);
         }
-        nav.addView(jobsTab, new LinearLayout.LayoutParams(0, 46, 1));
-        nav.addView(sourcesTab, new LinearLayout.LayoutParams(0, 46, 1));
-        nav.addView(officesTab, new LinearLayout.LayoutParams(0, 46, 1));
-        nav.addView(profileTab, new LinearLayout.LayoutParams(0, 46, 1));
+        nav.addView(jobsTab, new LinearLayout.LayoutParams(0, 58, 1));
+        nav.addView(offersTab, new LinearLayout.LayoutParams(0, 58, 1));
+        nav.addView(officesTab, new LinearLayout.LayoutParams(0, 58, 1));
+        nav.addView(trainingTab, new LinearLayout.LayoutParams(0, 58, 1));
+        nav.addView(profileTab, new LinearLayout.LayoutParams(0, 58, 1));
         root.addView(nav);
     }
 
     private void card(Job job, int position, int total) {
         LinearLayout c = column();
         c.setPadding(0, 0, 0, 0);
-        c.setBackground(shape(Color.WHITE, 24));
+        c.setBackground(shape(Color.rgb(24, 26, 31), 24));
         c.setClipToOutline(true);
 
         LinearLayout hero = column();
         hero.setPadding(20, 20, 20, 20);
         hero.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {Color.rgb(20, 31, 48), Color.rgb(0, 112, 87)}));
-        hero.addView(text("TUN-JOBS  •  OPPORTUNITÉ", 12, Color.rgb(255, 205, 92), true));
+                new int[] {Color.rgb(42, 39, 31), Color.rgb(15, 17, 23), Color.rgb(8, 10, 14)}));
+        hero.addView(text("✓  OPPORTUNITÉ À DÉCOUVRIR", 12, gold, true));
         space(hero, 22);
         hero.addView(text(job.title, 27, Color.WHITE, true));
         space(hero, 8);
@@ -267,21 +274,21 @@ public class MainActivity extends Activity {
         hero.addView(text("⌖  " + job.location + " • " + job.governorate, 14, Color.rgb(224, 235, 242), false));
         space(hero, 16);
         LinearLayout chips = row();
-        TextView sectorChip = text(job.sector, 12, Color.WHITE, true);
-        sectorChip.setBackground(shape(Color.rgb(0, 145, 105), 20));
+        TextView sectorChip = text(job.sector, 12, Color.rgb(20, 20, 22), true);
+        sectorChip.setBackground(shape(gold, 20));
         sectorChip.setPadding(12, 7, 12, 7);
         TextView contractChip = text(job.contract, 12, Color.WHITE, true);
-        contractChip.setBackground(shape(Color.rgb(66, 79, 96), 20));
+        contractChip.setBackground(shape(Color.rgb(61, 63, 69), 20));
         contractChip.setPadding(12, 7, 12, 7);
         chips.addView(sectorChip);
         space(chips, 0);
-        LinearLayout.LayoutParams chipParams = (LinearLayout.LayoutParams) contractChip.getLayoutParams();
         chips.addView(contractChip);
         hero.addView(chips);
         c.addView(hero);
 
         LinearLayout details = column();
         details.setPadding(20, 16, 20, 18);
+        details.setBackgroundColor(Color.rgb(24, 26, 31));
         details.addView(text("À propos du poste", 17, ink, true));
         space(details, 6);
         details.addView(text(job.description, 14, muted, false));
@@ -392,7 +399,7 @@ public class MainActivity extends Activity {
             visibleJobs.add(job);
         }
 
-        content.addView(text("Découvrir les offres", 20, ink, true));
+        content.addView(text("Découvrir les offres", 20, gold, true));
         space(content, 5);
         content.addView(text("Un format de cartes à parcourir, inspiré des applications de rencontre professionnelle. Les annonces de démonstration sont fictives.", 12, muted, false));
         space(content, 12);
@@ -486,7 +493,9 @@ public class MainActivity extends Activity {
         searchInput.setTextSize(15);
         searchInput.setHint("Métier, mot-clé ou entreprise");
         searchInput.setPadding(14, 10, 14, 10);
-        searchInput.setBackground(shape(Color.WHITE, 14));
+        searchInput.setTextColor(ink);
+        searchInput.setHintTextColor(muted);
+        searchInput.setBackground(shape(panel, 14));
         content.addView(searchInput, new LinearLayout.LayoutParams(-1, 52));
         space(content, 10);
 
@@ -537,10 +546,10 @@ public class MainActivity extends Activity {
         base("Menu TUN-JOBS", "Accès rapide à votre espace et aux réglages.");
         LinearLayout banner = column();
         banner.setPadding(20, 22, 20, 22);
-        banner.setBackground(shape(Color.rgb(22, 35, 52), 18));
+        banner.setBackground(shape(Color.rgb(24, 26, 31), 18));
         banner.addView(text("TUN-JOBS", 25, Color.WHITE, true));
         space(banner, 6);
-        banner.addView(text("EMPLOI • RECRUTEMENT • TUNISIE", 13, Color.rgb(180, 218, 205), true));
+        banner.addView(text("EMPLOI • RECRUTEMENT • TUNISIE", 13, gold, true));
         space(banner, 8);
         banner.addView(text("GASS-OS  •  BY AYMEN GHARSALLI", 13, Color.WHITE, false));
         content.addView(banner);
@@ -709,7 +718,9 @@ public class MainActivity extends Activity {
         field.setHint(hint);
         field.setText(value);
         field.setPadding(16, 6, 16, 6);
-        field.setBackground(shape(Color.WHITE, 14));
+        field.setTextColor(ink);
+        field.setHintTextColor(muted);
+        field.setBackground(shape(panel, 14));
         return field;
     }
 
@@ -774,7 +785,7 @@ public class MainActivity extends Activity {
         LinearLayout preview = column();
         preview.setPadding(18, 18, 18, 18);
         preview.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {Color.rgb(20, 31, 48), Color.rgb(0, 112, 87)}));
+                new int[] {Color.rgb(57, 45, 25), Color.rgb(15, 17, 23), Color.rgb(8, 10, 14)}));
         ImageView previewPhoto = new ImageView(this);
         previewPhoto.setScaleType(ImageView.ScaleType.CENTER_CROP);
         previewPhoto.setBackground(shape(Color.rgb(65, 80, 94), 22));
@@ -799,7 +810,7 @@ public class MainActivity extends Activity {
         preview.addView(text(p.getBoolean("profile_saved", false) ? "PROFIL ENREGISTRÉ SUR CET APPAREIL" : "APERÇU PRIVÉ • À COMPLÉTER", 11, Color.rgb(255, 205, 92), true));
         content.addView(preview);
         space(content, 18);
-        content.addView(text("Modifier mes informations", 20, ink, true));
+        content.addView(text("Modifier mes informations", 20, gold, true));
         space(content, 8);
         ImageView photo = new ImageView(this);
         profilePhotoView = photo;
