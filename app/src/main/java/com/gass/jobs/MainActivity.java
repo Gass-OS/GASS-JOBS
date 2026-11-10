@@ -82,6 +82,7 @@ public class MainActivity extends Activity {
     private LinearLayout actionBar;
     private TextView likeStamp, nopeStamp;
     private boolean animating = false;
+    private boolean profileVisible = false;
     private final ExecutorService authExecutor = Executors.newSingleThreadExecutor();
 
     private static class Job {
@@ -203,6 +204,7 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         if (getSharedPreferences("tun_jobs", MODE_PRIVATE).getBoolean("welcome_done", false)) showHome();
         else showWelcome();
+        if (!SecureSessionStore.read(this).isEmpty()) loadRemoteCandidateProfile();
     }
 
     private void prepareScreen(boolean rootScreen, Runnable action) {
@@ -349,6 +351,7 @@ public class MainActivity extends Activity {
 
     /** tab < 0 hides the bottom navigation; title == null hides the title block. */
     private void base(String title, String subtitle, int tab, boolean scrollable) {
+        profileVisible = false;
         if (pendingRootScreen) {
             screenHistory.clear();
         } else if (!restoringScreen && currentScreenAction != null) {
@@ -1170,7 +1173,8 @@ public class MainActivity extends Activity {
         String token = SecureSessionStore.read(this);
         String userId = getSharedPreferences("tun_jobs_account", MODE_PRIVATE).getString("user_id", "");
         if (token.isEmpty() || userId.isEmpty()) {
-            Toast.makeText(this, "Profil local enregistré. Connectez-vous pour activer la synchronisation.", Toast.LENGTH_LONG).show();
+            getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit().putString("sync_status", "pending").apply();
+            Toast.makeText(this, "Profil enregistré localement. Connectez-vous pour le synchroniser.", Toast.LENGTH_LONG).show();
             return;
         }
         Toast.makeText(this, "Synchronisation du profil…", Toast.LENGTH_SHORT).show();
@@ -1179,11 +1183,39 @@ public class MainActivity extends Activity {
                     userId, token, fullName, phone, city, profession, education, skills, availability);
             runOnUiThread(() -> {
                 if (isFinishing()) return;
+                getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit()
+                        .putString("sync_status", result.ok ? "online" : "pending").apply();
+                if (profileVisible) showProfile();
                 new AlertDialog.Builder(this)
                         .setTitle(result.ok ? "Profil synchronisé" : "Synchronisation impossible")
                         .setMessage(result.message)
                         .setPositiveButton("OK", null).show();
             });
+        });
+    }
+
+    private void loadRemoteCandidateProfile() {
+        final String token = SecureSessionStore.read(this);
+        final String userId = getSharedPreferences("tun_jobs_account", MODE_PRIVATE).getString("user_id", "");
+        if (token.isEmpty() || userId.isEmpty()) return;
+        authExecutor.execute(() -> {
+            try {
+                SupabaseProfile.ProfileData remote = SupabaseProfile.fetch(userId, token);
+                if (remote == null) return;
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    android.content.SharedPreferences.Editor e = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
+                    e.putString("name", remote.fullName).putString("phone", remote.phone)
+                            .putString("city", remote.city).putString("experience", remote.profession)
+                            .putString("education", remote.education).putString("skills", remote.skills)
+                            .putString("availability", remote.availability)
+                            .putBoolean("profile_saved", true).putString("sync_status", "online")
+                            .putLong("profile_updated_at", System.currentTimeMillis()).apply();
+                    if (profileVisible) showProfile();
+                });
+            } catch (Exception ignored) {
+                // Keep the last local copy intact when offline or when the session needs re-authentication.
+            }
         });
     }
 
@@ -1219,7 +1251,10 @@ public class MainActivity extends Activity {
                     getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit().putString("email", email).apply();
                 }
                 new AlertDialog.Builder(this).setTitle(create ? "Inscription" : "Connexion")
-                        .setMessage(result.message).setPositiveButton("Continuer", (d, w) -> showAccount()).show();
+                        .setMessage(result.message).setPositiveButton("Continuer", (d, w) -> {
+                            if (!result.accessToken.isEmpty()) loadRemoteCandidateProfile();
+                            showAccount();
+                        }).show();
             });
         });
     }
@@ -1514,6 +1549,7 @@ public class MainActivity extends Activity {
     private void showProfile() {
         prepareScreen(true, this::showProfile);
         base("Votre carte candidat", "Un profil clair pour présenter votre parcours professionnel.", TAB_PROFILE, true);
+        profileVisible = true;
 
         android.content.SharedPreferences p = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
         content.addView(text("Aperçu de votre profil", 20, ink, true));
@@ -1542,7 +1578,11 @@ public class MainActivity extends Activity {
         space(preview, 8);
         preview.addView(text(p.getString("skills", "Ajoutez vos compétences pour compléter votre carte."), 13, Color.WHITE, false));
         space(preview, 10);
-        preview.addView(text(p.getBoolean("profile_saved", false) ? "PROFIL ENREGISTRÉ SUR CET APPAREIL" : "APERÇU PRIVÉ • À COMPLÉTER", 11, Color.rgb(255, 205, 92), true));
+        String syncState = p.getString("sync_status", "local");
+        String syncLabel = "online".equals(syncState) ? "✓ SYNCHRONISÉ EN LIGNE"
+                : ("failed".equals(syncState) ? "⚠ ÉCHEC DE SYNCHRONISATION"
+                : (p.getBoolean("profile_saved", false) ? "● ENREGISTRÉ LOCALEMENT • EN ATTENTE" : "APERÇU PRIVÉ • À COMPLÉTER"));
+        preview.addView(text(syncLabel, 11, "online".equals(syncState) ? Color.rgb(100, 220, 150) : Color.rgb(255, 205, 92), true));
         content.addView(preview);
         space(content, 18);
         content.addView(text("Modifier mes informations", 20, gold, true));
@@ -1600,13 +1640,14 @@ public class MainActivity extends Activity {
             String[] keys = {"name","phone","email","city","experience","education","skills","availability"};
             for (int i=0;i<fields.length;i++) e.putString(keys[i], fields[i].getText().toString().trim());
             e.putBoolean("profile_saved", true);
+            e.putString("sync_status", "pending");
             e.putLong("profile_updated_at", System.currentTimeMillis());
             boolean stored = e.commit();
             if (!stored) {
                 Toast.makeText(this, "Erreur : le profil n'a pas pu être enregistré.", Toast.LENGTH_LONG).show();
                 return;
             }
-            Toast.makeText(this, "Profil enregistré sur ce téléphone.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Profil enregistré localement.", Toast.LENGTH_SHORT).show();
             syncCandidateProfile(
                     fields[0].getText().toString().trim(),
                     fields[1].getText().toString().trim(),
@@ -1617,7 +1658,8 @@ public class MainActivity extends Activity {
                     fields[7].getText().toString().trim());
         }), new LinearLayout.LayoutParams(-1, dp(60)));
         space(content, 8);
-        content.addView(text("Le profil est conservé sur ce téléphone. Si vous êtes connecté, vos informations professionnelles et votre téléphone sont aussi synchronisés avec votre compte Supabase. La photo et le CV restent privés sur cet appareil dans cette étape.", 13, muted, false));
+        content.addView(text("État du profil : " + ("online".equals(p.getString("sync_status", "local")) ? "synchronisé en ligne" : "enregistré localement, synchronisation en attente").toUpperCase(Locale.ROOT)
+                + ". La photo et le CV restent privés sur cet appareil et ne sont pas envoyés à Supabase.", 13, muted, false));
 
         space(content, 22);
         content.addView(text("Mes offres sauvegardées", 20, ink, true));

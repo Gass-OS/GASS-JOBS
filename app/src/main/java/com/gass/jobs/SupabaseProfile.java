@@ -1,5 +1,6 @@
 package com.gass.jobs;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -13,6 +14,16 @@ final class SupabaseProfile {
         final boolean ok;
         final String message;
         Result(boolean ok, String message) { this.ok = ok; this.message = message; }
+    }
+
+    static final class ProfileData {
+        final String fullName, phone, city, profession, education, skills, availability;
+        ProfileData(String fullName, String phone, String city, String profession,
+                    String education, String skills, String availability) {
+            this.fullName=fullName; this.phone=phone; this.city=city;
+            this.profession=profession; this.education=education;
+            this.skills=skills; this.availability=availability;
+        }
     }
 
     static Result upsert(String userId, String token, String fullName, String phone,
@@ -36,10 +47,24 @@ final class SupabaseProfile {
             privateDetails.put("user_id", userId);
             privateDetails.put("phone", phone);
             request("/rest/v1/candidate_private?on_conflict=user_id", token, privateDetails);
-            return new Result(true, "Vos informations professionnelles sont maintenant synchronisées avec votre compte. Le téléphone reste dans la table privée, protégé par les règles d'accès Supabase. La photo et le CV ne sont pas encore envoyés.");
+            return new Result(true, "Votre profil est synchronisé avec votre compte. Le téléphone est stocké dans la table privée protégée par les règles Supabase. La photo et le CV restent uniquement sur cet appareil.");
         } catch (Exception e) {
-            return new Result(false, "Le profil reste enregistré sur ce téléphone, mais la synchronisation Supabase a échoué : " + e.getMessage());
+            return new Result(false, "Le profil reste enregistré localement, mais la synchronisation a échoué : " + e.getMessage());
         }
+    }
+
+    static ProfileData fetch(String userId, String token) throws Exception {
+        String filter = "?user_id=eq." + userId + "&select=full_name,city,profession,education,skills,availability";
+        JSONArray cards = new JSONArray(get("/rest/v1/candidate_cards" + filter, token));
+        if (cards.length() == 0) return null;
+        JSONObject card = cards.getJSONObject(0);
+        String privateFilter = "?user_id=eq." + userId + "&select=phone";
+        JSONArray privateRows = new JSONArray(get("/rest/v1/candidate_private" + privateFilter, token));
+        String phone = privateRows.length() == 0 ? "" : privateRows.getJSONObject(0).optString("phone", "");
+        return new ProfileData(
+                card.optString("full_name", ""), phone, card.optString("city", ""),
+                card.optString("profession", ""), card.optString("education", ""),
+                card.optString("skills", ""), card.optString("availability", ""));
     }
 
     private static void request(String path, String token, JSONObject body) throws Exception {
@@ -59,15 +84,28 @@ final class SupabaseProfile {
             try (OutputStream out = c.getOutputStream()) { out.write(bytes); }
             int status = c.getResponseCode();
             if (status < 200 || status >= 300) {
-                InputStream stream = c.getErrorStream();
-                String error = readAll(stream);
-                throw new IllegalStateException("Supabase (" + status + "): " + error);
+                throw new IllegalStateException("Supabase (" + status + "): " + readAll(c.getErrorStream()));
             }
             InputStream stream = c.getInputStream();
             if (stream != null) stream.close();
-        } finally {
-            if (c != null) c.disconnect();
-        }
+        } finally { if (c != null) c.disconnect(); }
+    }
+
+    private static String get(String path, String token) throws Exception {
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(SupabaseConfig.PROJECT_URL + path).openConnection();
+            c.setRequestMethod("GET");
+            c.setConnectTimeout(15000);
+            c.setReadTimeout(20000);
+            c.setRequestProperty("apikey", SupabaseConfig.PUBLISHABLE_KEY);
+            c.setRequestProperty("Authorization", "Bearer " + token);
+            int status = c.getResponseCode();
+            if (status < 200 || status >= 300) {
+                throw new IllegalStateException("Supabase (" + status + "): " + readAll(c.getErrorStream()));
+            }
+            return readAll(c.getInputStream());
+        } finally { if (c != null) c.disconnect(); }
     }
 
     private static String readAll(InputStream in) throws Exception {
