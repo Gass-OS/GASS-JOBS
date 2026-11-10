@@ -238,7 +238,70 @@ public class MainActivity extends Activity {
     }
 
     private String tr(String value) {
-        if (!isArabic() || value == null) return value;
+        if (value == null) return null;
+        if ("en".equals(getSharedPreferences("tun_jobs", MODE_PRIVATE).getString("language", "fr"))) {
+            switch (value) {
+                case "Bienvenue sur TUN-JOBS": return "Welcome to TUN-JOBS";
+                case "L'emploi et le recrutement, partout en Tunisie.": return "Jobs and recruitment, across Tunisia.";
+                case "Votre prochain emploi peut commencer ici.": return "Your next job can start here.";
+                case "Trouvez des opportunités près de chez vous, consultez les sources officielles et préparez votre profil candidat. Les employeurs peuvent aussi préparer leurs offres.": return "Find opportunities nearby, browse official sources and build your candidate profile. Employers can prepare job offers too.";
+                case "Je cherche un emploi": return "I'm looking for a job";
+                case "Je propose un emploi": return "I'm offering a job";
+                case "Se connecter": return "Log in";
+                case "Créer un compte": return "Sign up";
+                case "Ou découvrir TUN-JOBS sans compte": return "Or explore TUN-JOBS without an account";
+                case "Langue de l'application": return "App language";
+                case "Changer la langue": return "Change language";
+                case "Votre carte candidat": return "Your candidate profile";
+                case "Un profil clair pour présenter votre parcours professionnel.": return "A clear profile to present your professional background.";
+                case "Aperçu de votre profil": return "Profile preview";
+                case "Modifier mes informations": return "Edit my information";
+                case "Nom et prénom": return "Full name";
+                case "Téléphone": return "Phone";
+                case "Adresse e-mail": return "Email address";
+                case "Ville / gouvernorat": return "City / governorate";
+                case "Expérience et métier recherché": return "Experience and desired job";
+                case "Formation / diplôme": return "Education / qualification";
+                case "Compétences": return "Skills";
+                case "Disponibilité": return "Availability";
+                case "Nom et prénom *": return "Full name *";
+                case "Téléphone *": return "Phone *";
+                case "E-mail": return "Email";
+                case "Mot de passe": return "Password";
+                case "Mot de passe (6 caractères minimum)": return "Password (at least 6 characters)";
+                case "Ajouter / modifier ma photo": return "Add / change my photo";
+                case "Joindre mon CV (PDF ou document)": return "Attach my CV";
+                case "Aucun CV sélectionné": return "No CV selected";
+                case "CV enregistré sur cet appareil": return "CV saved on this device";
+                case "Enregistrer mon profil sur ce téléphone": return "Save my profile on this phone";
+                case "Mes offres sauvegardées": return "My saved jobs";
+                case "Aucune offre sauvegardée pour le moment.": return "No saved jobs yet.";
+                case "Paramètres": return "Settings";
+                case "Préférences de TUN-JOBS sur cet appareil.": return "TUN-JOBS preferences on this device.";
+                case "Confidentialité": return "Privacy";
+                case "Retour aux emplois": return "Back to jobs";
+                case "Accueil": return "Home";
+                case "Offres": return "Jobs";
+                case "Profil": return "Profile";
+                case "Employeurs": return "Employers";
+                case "Plus": return "More";
+                case "Menu TUN-JOBS": return "TUN-JOBS menu";
+                case "À propos": return "About";
+                case "Sites officiels de l'emploi": return "Official employment websites";
+                case "Bureaux régionaux": return "Regional offices";
+                case "Retour": return "Back";
+                case "✓ SYNCHRONISÉ EN LIGNE": return "✓ SYNCED ONLINE";
+                case "⚠ ÉCHEC DE SYNCHRONISATION": return "⚠ SYNC FAILED";
+                case "● ENREGISTRÉ LOCALEMENT • EN ATTENTE": return "● SAVED LOCALLY • PENDING";
+                case "APERÇU PRIVÉ • À COMPLÉTER": return "PRIVATE PREVIEW • INCOMPLETE";
+                case "E-mail et CV restent masqués dans cet aperçu public.": return "Email and CV are hidden from this public preview.";
+                case "Français": return "French";
+                case "English": return "English";
+                case "العربية": return "Arabic";
+                default: break;
+            }
+        }
+        if (!isArabic()) return value;
         switch (value) {
             case "Bienvenue sur TUN-JOBS": return "مرحباً بك في TUN-JOBS";
             case "L'emploi et le recrutement, partout en Tunisie.": return "التشغيل والانتداب في كامل تونس";
@@ -246,6 +309,7 @@ public class MainActivity extends Activity {
             case "Trouvez des opportunités près de chez vous, consultez les sources officielles et préparez votre profil candidat. Les employeurs peuvent aussi préparer leurs offres.": return "اكتشف فرص العمل بالقرب منك، وتصفّح المصادر الرسمية وأنشئ ملفك المهني. ويمكن للمؤسسات إعداد عروضها أيضاً.";
             case "Je cherche un emploi": return "أبحث عن عمل";
             case "Je propose un emploi": return "أعرض وظيفة";
+            case "Ou découvrir TUN-JOBS sans compte": return "أو استكشف TUN-JOBS دون حساب";
             case "Se connecter": return "تسجيل الدخول";
             case "Créer un compte": return "إنشاء حساب";
             case "Langue de l'application": return "لغة التطبيق";
@@ -295,6 +359,7 @@ public class MainActivity extends Activity {
             case "Français": return "الفرنسية";
             case "English": return "الإنجليزية";
             case "العربية": return "العربية";
+            case "E-mail et CV restent masqués dans cet aperçu public.": return "يبقى البريد الإلكتروني والسيرة الذاتية مخفيين في هذه المعاينة العامة.";
             default: return value;
         }
     }
