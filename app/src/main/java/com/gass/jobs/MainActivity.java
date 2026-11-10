@@ -1706,9 +1706,14 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "Impossible d'enregistrer le fichier. Choisissez un autre document.", Toast.LENGTH_LONG).show();
             return;
         }
+        String selectedMime = getContentResolver().getType(selected);
         android.content.SharedPreferences.Editor edit = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
-        if (requestCode == PICK_PROFILE_PHOTO) edit.putString("photo_file", copied).remove("photo_uri").remove("photo_remote_path");
-        if (requestCode == PICK_PROFILE_CV) edit.putString("cv_file", copied).remove("cv_uri").remove("cv_remote_path");
+        if (requestCode == PICK_PROFILE_PHOTO) edit.putString("photo_file", copied)
+                .putString("photo_mime", selectedMime == null ? "image/jpeg" : selectedMime)
+                .remove("photo_uri").remove("photo_remote_path");
+        if (requestCode == PICK_PROFILE_CV) edit.putString("cv_file", copied)
+                .putString("cv_mime", selectedMime == null ? "application/pdf" : selectedMime)
+                .remove("cv_uri").remove("cv_remote_path");
         if (!edit.commit()) {
             Toast.makeText(this, "Le fichier est copié, mais l'enregistrement du profil a échoué.", Toast.LENGTH_LONG).show();
             return;
@@ -1760,10 +1765,12 @@ public class MainActivity extends Activity {
         String cvPath = prefs.getString("cv_remote_path", "");
         String localPhoto = prefs.getString("photo_file", "");
         String localCv = prefs.getString("cv_file", "");
+        String photoMime = prefs.getString("photo_mime", "image/jpeg");
+        String cvMime = prefs.getString("cv_mime", "application/pdf");
         if (photoPath.isEmpty() && !localPhoto.isEmpty()) {
             File file = new File(getFilesDir(), localPhoto);
             if (file.isFile()) {
-                photoPath = SupabaseStorage.upload(file, "candidate-photos", userId, token, "image/jpeg");
+                photoPath = SupabaseStorage.upload(file, "candidate-photos", userId, token, photoMime);
                 SupabaseProfile.updateAssetPaths(userId, token, photoPath, cvPath);
                 prefs.edit().putString("photo_remote_path", photoPath).apply();
             }
@@ -1771,10 +1778,7 @@ public class MainActivity extends Activity {
         if (cvPath.isEmpty() && !localCv.isEmpty()) {
             File file = new File(getFilesDir(), localCv);
             if (file.isFile()) {
-                String lower = localCv.toLowerCase(Locale.ROOT);
-                String mime = lower.endsWith(".pdf") ? "application/pdf"
-                        : (lower.endsWith(".docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/msword");
-                cvPath = SupabaseStorage.upload(file, "candidate-cvs", userId, token, mime);
+                cvPath = SupabaseStorage.upload(file, "candidate-cvs", userId, token, cvMime);
                 SupabaseProfile.updateAssetPaths(userId, token, photoPath, cvPath);
                 prefs.edit().putString("cv_remote_path", cvPath).apply();
             }
