@@ -16,8 +16,8 @@ This branch adds the database/security foundation for cross-device accounts, job
 - CV downloads use authenticated access to the private bucket; do not make CVs public or store permanent public URLs.
 - Job rows include optional latitude/longitude. The app must request location only after the user taps the nearby-sort control and must work when permission is denied.
 
-## Required Android configuration (not committed)
-The native Android client will need the Supabase Project URL and publishable/anon key. Configure them as local Gradle properties or GitHub Actions secrets; do not hard-code credentials. Only the publishable/anon key is safe for client use when Row Level Security is enabled.
+## Android client configuration
+The supplied Project URL and publishable key are configured in `SupabaseConfig.java`. A publishable key is intended for client-side use, but it is not an authorization bypass: keep Row Level Security enabled and use the policies in the migration. Never add a `service_role` or secret key to the Android app.
 
 ## Current implementation boundary
-The GPS permission and local city-distance sorting are implemented in the app. The current built-in job examples remain clearly marked as demonstration data; the ANETI cards remain source-linked. Live accounts, remote offer publication, applications, and candidate/CV delivery are not active until the Supabase project is created, configured, and the Android API integration is completed and tested.
+The GPS permission and local city-distance sorting are implemented in the app. The current built-in job examples remain clearly marked as demonstration data; the ANETI cards remain source-linked. Supabase credentials are configured, but the Android authentication, remote offer publication, applications, and consent-controlled candidate/CV delivery are not yet implemented. Run the SQL migration in your Supabase project's SQL Editor before proceeding with live API integration.
