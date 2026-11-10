@@ -1168,7 +1168,7 @@ public class MainActivity extends Activity {
         content.addView(text("Après inscription, vérifiez votre boîte e-mail si la confirmation est demandée. N'utilisez pas le même mot de passe que vos autres services.", 12, muted, false));
     }
 
-    private void syncCandidateProfile(String fullName, String phone, String city, String profession,
+    private void syncCandidateProfile(String fullName, String phone, String email, String city, String profession,
                                       String education, String skills, String availability) {
         String token = SecureSessionStore.read(this);
         String userId = getSharedPreferences("tun_jobs_account", MODE_PRIVATE).getString("user_id", "");
@@ -1180,7 +1180,7 @@ public class MainActivity extends Activity {
         Toast.makeText(this, "Synchronisation du profil…", Toast.LENGTH_SHORT).show();
         authExecutor.execute(() -> {
             SupabaseProfile.Result result = SupabaseProfile.upsert(
-                    userId, token, fullName, phone, city, profession, education, skills, availability);
+                    userId, token, fullName, phone, email, city, profession, education, skills, availability);
             runOnUiThread(() -> {
                 if (isFinishing()) return;
                 getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit()
@@ -1206,7 +1206,7 @@ public class MainActivity extends Activity {
                     if (isFinishing()) return;
                     android.content.SharedPreferences.Editor e = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
                     e.putString("name", remote.fullName).putString("phone", remote.phone)
-                            .putString("city", remote.city).putString("experience", remote.profession)
+                            .putString("email", remote.email).putString("city", remote.city).putString("experience", remote.profession)
                             .putString("education", remote.education).putString("skills", remote.skills)
                             .putString("availability", remote.availability)
                             .putBoolean("profile_saved", true).putString("sync_status", "online")
@@ -1651,6 +1651,7 @@ public class MainActivity extends Activity {
             syncCandidateProfile(
                     fields[0].getText().toString().trim(),
                     fields[1].getText().toString().trim(),
+                    fields[2].getText().toString().trim(),
                     fields[3].getText().toString().trim(),
                     fields[4].getText().toString().trim(),
                     fields[5].getText().toString().trim(),
