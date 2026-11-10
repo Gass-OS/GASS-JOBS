@@ -51,6 +51,7 @@ public class MainActivity extends Activity {
     private ImageView profilePhotoView;
     private TextView profileCvLabel;
     private int swipeIndex = 0;
+    private int candidateSwipeIndex = 0;
     private final ArrayList<Job> visibleJobs = new ArrayList<Job>();
 
     private static class Job {
@@ -66,6 +67,29 @@ public class MainActivity extends Activity {
         }
         String key() { return title + "|" + company + "|" + location; }
     }
+
+    private static class Candidate {
+        final String name, profession, city, experience, education, skills, availability;
+        Candidate(String name, String profession, String city, String experience, String education, String skills, String availability) {
+            this.name = name;
+            this.profession = profession;
+            this.city = city;
+            this.experience = experience;
+            this.education = education;
+            this.skills = skills;
+            this.availability = availability;
+        }
+        String key() { return name + "|" + profession + "|" + city; }
+    }
+
+    // Fictional examples used only to demonstrate the candidate discovery UI.
+    private final List<Candidate> demoCandidates = new ArrayList<Candidate>() {{
+        add(new Candidate("Sarra Ben Ali", "Assistante administrative", "Kasserine", "2 ans", "BTS gestion", "Bureautique • Accueil • Organisation", "Disponible immédiatement"));
+        add(new Candidate("Youssef Trabelsi", "Technicien informatique", "Sbeitla", "3 ans", "Technicien supérieur", "Maintenance • Réseaux • Support", "Disponible sous 2 semaines"));
+        add(new Candidate("Meriem Gharbi", "Comptable", "Kasserine", "4 ans", "Licence comptabilité", "Sage • Excel • Facturation", "Temps plein"));
+        add(new Candidate("Fares Jlassi", "Électricien bâtiment", "Fériana", "5 ans", "CAP électricité", "Installation • Sécurité • Maintenance", "Disponible immédiatement"));
+        add(new Candidate("Ines Khemiri", "Vendeuse / Conseillère", "Kairouan", "1 an", "Baccalauréat", "Vente • Relation client • Caisse", "Temps plein ou partiel"));
+    }};
 
     // Fictional examples used only to demonstrate the search UI.
     private final List<Job> demoJobs = new ArrayList<Job>() {{
@@ -455,6 +479,13 @@ public class MainActivity extends Activity {
         if (employerMode) {
             content.addView(text("Votre espace recruteur", 21, ink, true));
             space(content, 8);
+            content.addView(text("Découvrez des profils candidats présentés sous forme de cartes, puis préparez vos offres d'emploi.", 14, muted, false));
+            space(content, 12);
+            content.addView(button("♡  Découvrir les candidats", true, this::showCandidateDeck),
+                    new LinearLayout.LayoutParams(-1, 58));
+            space(content, 12);
+            content.addView(text("Les profils affichés dans cette démonstration sont fictifs. Aucun candidat réel n'est publié ni contacté.", 12, muted, false));
+            space(content, 14);
             content.addView(text("Préparez une annonce pour les candidats de Kasserine et de toute la Tunisie. Votre brouillon reste uniquement sur cet appareil : il n'est pas publié ni transmis.", 14, muted, false));
             space(content, 14);
             content.addView(button("＋  Créer une offre", true, this::showEmployerDraft), new LinearLayout.LayoutParams(-1, 54));
@@ -539,6 +570,144 @@ public class MainActivity extends Activity {
         resultsContainer = column();
         content.addView(resultsContainer);
         renderJobs();
+    }
+
+
+    private void showCandidateDeck() {
+        prepareScreen(false, this::showCandidateDeck);
+        base("Découvrir les candidats", "Parcourez les profils et présélectionnez les compétences utiles.");
+        content.addView(text("CANDIDATS  •  FORMAT CARTE", 13, gold, true));
+        space(content, 6);
+        content.addView(text("Glissez à gauche pour passer, à droite pour ajouter un profil à votre présélection. Tous les profils ci-dessous sont fictifs et servent uniquement à présenter l'interface.", 13, muted, false));
+        space(content, 16);
+
+        if (candidateSwipeIndex >= demoCandidates.size()) {
+            content.addView(text("Vous avez parcouru tous les profils de démonstration.", 17, ink, true));
+            space(content, 12);
+            content.addView(button("Recommencer les profils", true, () -> {
+                candidateSwipeIndex = 0;
+                showCandidateDeck();
+            }), new LinearLayout.LayoutParams(-1, 54));
+        } else {
+            Candidate candidate = demoCandidates.get(candidateSwipeIndex);
+            LinearLayout profileCard = column();
+            profileCard.setBackground(shape(Color.rgb(24, 27, 34), 28));
+            profileCard.setClipToOutline(true);
+
+            LinearLayout hero = column();
+            hero.setGravity(Gravity.CENTER_HORIZONTAL);
+            hero.setPadding(22, 24, 22, 24);
+            hero.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    new int[] {Color.rgb(52, 65, 78), Color.rgb(30, 39, 51), Color.rgb(13, 17, 24)}));
+            TextView avatar = text(candidate.name.substring(0, 1).toUpperCase(Locale.ROOT), 42, Color.WHITE, true);
+            avatar.setGravity(Gravity.CENTER);
+            avatar.setBackground(shape(Color.rgb(191, 139, 48), 100));
+            hero.addView(avatar, new LinearLayout.LayoutParams(104, 104));
+            space(hero, 16);
+            hero.addView(text("PROFIL DE DÉMONSTRATION • FICTIF", 11, Color.rgb(255, 207, 105), true));
+            space(hero, 10);
+            TextView name = text(candidate.name, 27, Color.WHITE, true);
+            name.setGravity(Gravity.CENTER);
+            hero.addView(name);
+            space(hero, 5);
+            TextView profession = text(candidate.profession, 17, Color.rgb(245, 218, 165), true);
+            profession.setGravity(Gravity.CENTER);
+            hero.addView(profession);
+            space(hero, 8);
+            TextView city = text("⌖  " + candidate.city + " • Tunisie", 14, Color.rgb(224, 232, 240), false);
+            city.setGravity(Gravity.CENTER);
+            hero.addView(city);
+            profileCard.addView(hero);
+
+            LinearLayout details = column();
+            details.setPadding(22, 20, 22, 22);
+            details.setBackgroundColor(Color.rgb(24, 27, 34));
+            details.addView(text("Expérience", 13, muted, true));
+            space(details, 3);
+            details.addView(text(candidate.experience, 19, ink, true));
+            space(details, 12);
+            details.addView(text("Formation", 13, muted, true));
+            space(details, 3);
+            details.addView(text(candidate.education, 16, ink, true));
+            space(details, 12);
+            details.addView(text("Compétences", 13, muted, true));
+            space(details, 5);
+            TextView skills = text(candidate.skills, 15, Color.rgb(225, 229, 236), false);
+            skills.setBackground(shape(Color.rgb(39, 44, 53), 16));
+            skills.setPadding(14, 12, 14, 12);
+            details.addView(skills);
+            space(details, 14);
+            TextView availability = text("●  " + candidate.availability, 13, Color.rgb(255, 207, 105), true);
+            details.addView(availability);
+            space(details, 10);
+            details.addView(text((candidateSwipeIndex + 1) + " / " + demoCandidates.size() + " • Profil fictif, non publiable", 12, muted, false));
+            space(details, 14);
+
+            LinearLayout actions = row();
+            Button pass = button("✕  Passer", false, () -> {
+                candidateSwipeIndex++;
+                showCandidateDeck();
+            });
+            Button shortlist = button("♡  Présélectionner", true, () -> {
+                saveCandidate(candidate);
+                candidateSwipeIndex++;
+                showCandidateDeck();
+            });
+            actions.addView(pass, new LinearLayout.LayoutParams(0, 52, 1));
+            actions.addView(shortlist, new LinearLayout.LayoutParams(0, 52, 1));
+            details.addView(actions);
+            space(details, 8);
+            details.addView(button("Voir le profil", false, () -> new AlertDialog.Builder(this)
+                    .setTitle(candidate.name + " — " + candidate.profession)
+                    .setMessage("Ville : " + candidate.city + "\nExpérience : " + candidate.experience
+                            + "\nFormation : " + candidate.education + "\nCompétences : " + candidate.skills
+                            + "\nDisponibilité : " + candidate.availability
+                            + "\n\nProfil fictif de démonstration. Aucun contact réel n'est associé.")
+                    .setPositiveButton("Fermer", (dialog, which) -> dialog.dismiss()).show()));
+            profileCard.addView(details);
+
+            final float[] downX = {0f};
+            profileCard.setOnTouchListener((view, event) -> {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    downX[0] = event.getX();
+                    return true;
+                }
+                if (event.getAction() == MotionEvent.ACTION_UP) {
+                    float delta = event.getX() - downX[0];
+                    if (Math.abs(delta) > 85f) {
+                        view.animate().translationX(delta > 0 ? 520f : -520f).alpha(0.25f).setDuration(160)
+                                .withEndAction(() -> {
+                                    view.setTranslationX(0f);
+                                    view.setAlpha(1f);
+                                    if (delta > 0) saveCandidate(candidate);
+                                    candidateSwipeIndex++;
+                                    showCandidateDeck();
+                                }).start();
+                    } else view.performClick();
+                    return true;
+                }
+                return true;
+            });
+            content.addView(profileCard, new LinearLayout.LayoutParams(-1, -2));
+            space(content, 12);
+            content.addView(text("Glissez à gauche pour passer • à droite pour présélectionner", 12, muted, false));
+        }
+
+        space(content, 18);
+        Set<String> shortlisted = new HashSet<String>(getSharedPreferences("tun_jobs_candidates", MODE_PRIVATE)
+                .getStringSet("keys", new HashSet<String>()));
+        content.addView(text("Profils présélectionnés : " + shortlisted.size(), 14, gold, true));
+        space(content, 8);
+        content.addView(button("Retour à l'espace recruteur", false, this::showHome),
+                new LinearLayout.LayoutParams(-1, 52));
+    }
+
+    private void saveCandidate(Candidate candidate) {
+        android.content.SharedPreferences prefs = getSharedPreferences("tun_jobs_candidates", MODE_PRIVATE);
+        Set<String> saved = new HashSet<String>(prefs.getStringSet("keys", new HashSet<String>()));
+        boolean added = saved.add(candidate.key());
+        prefs.edit().putStringSet("keys", saved).apply();
+        Toast.makeText(this, added ? "Profil ajouté à la présélection." : "Profil déjà présélectionné.", Toast.LENGTH_SHORT).show();
     }
 
     private void showMenu() {
