@@ -5,7 +5,9 @@
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <application
         android:allowBackup="false"
-        android:label="tun-jobs"
+        android:label="TUN-JOBS"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false">
