@@ -1537,6 +1537,7 @@ public class MainActivity extends Activity {
         content.addView(text("ME RETROUVER EN LIGNE", 13, gold, true));
         space(content, 9);
         addSocialLink("⌘   GitHub — GASS-OS", "https://github.com/Gass-OS");
+        addSocialLink("🌐   Site officiel — TUN-JOBS", "https://gass-os.github.io/GASS-JOBS/");
         addSocialLink("▶   YouTube — Luxtrust OS", "https://www.youtube.com/@Luxtrust-Os");
         addSocialLink("f   Facebook", "https://www.facebook.com/BMENLUXIII");
         addSocialLink("✉   gharsalli1994@gmail.com", "mailto:gharsalli1994@gmail.com");
