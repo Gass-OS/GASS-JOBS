@@ -1131,7 +1131,7 @@ public class MainActivity extends Activity {
         prepareScreen(false, this::showAccount);
         android.content.SharedPreferences account = getSharedPreferences("tun_jobs_account", MODE_PRIVATE);
         String savedEmail = account.getString("email", "");
-        String token = account.getString("access_token", "");
+        String token = SecureSessionStore.read(this);
         base("Compte TUN-JOBS", "Connexion sécurisée avec votre compte Supabase.");
         if (!token.isEmpty()) {
             content.addView(chip("✓ CONNECTÉ", true));
@@ -1142,6 +1142,7 @@ public class MainActivity extends Activity {
             space(content, 16);
             content.addView(button("Se déconnecter", false, () -> {
                 account.edit().clear().apply();
+                SecureSessionStore.clear(this);
                 Toast.makeText(this, "Déconnecté de TUN-JOBS.", Toast.LENGTH_SHORT).show();
                 showAccount();
             }));
@@ -1181,10 +1182,17 @@ public class MainActivity extends Activity {
                     return;
                 }
                 if (!result.accessToken.isEmpty()) {
-                    getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit()
-                            .putString("access_token", result.accessToken)
-                            .putString("user_id", result.userId)
-                            .putString("email", email).apply();
+                    try {
+                        SecureSessionStore.save(this, result.accessToken);
+                        getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit()
+                                .putString("user_id", result.userId)
+                                .putString("email", email).apply();
+                    } catch (Exception secureError) {
+                        new AlertDialog.Builder(this).setTitle("Session non enregistrée")
+                                .setMessage("La connexion a réussi, mais la session sécurisée n'a pas pu être enregistrée sur cet appareil.")
+                                .setPositiveButton("OK", null).show();
+                        return;
+                    }
                 } else {
                     getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit().putString("email", email).apply();
                 }
