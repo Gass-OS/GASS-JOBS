@@ -83,6 +83,7 @@ public class MainActivity extends Activity {
     private TextView likeStamp, nopeStamp;
     private boolean animating = false;
     private boolean profileVisible = false;
+    private boolean preferSignupOnAccount = false;
     private final ExecutorService authExecutor = Executors.newSingleThreadExecutor();
 
     private static class Job {
@@ -232,6 +233,94 @@ public class MainActivity extends Activity {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
+    private boolean isArabic() {
+        return "ar".equals(getSharedPreferences("tun_jobs", MODE_PRIVATE).getString("language", "fr"));
+    }
+
+    private String tr(String value) {
+        if (!isArabic() || value == null) return value;
+        switch (value) {
+            case "Bienvenue sur TUN-JOBS": return "مرحباً بك في TUN-JOBS";
+            case "L'emploi et le recrutement, partout en Tunisie.": return "التشغيل والانتداب في كامل تونس";
+            case "Votre prochain emploi peut commencer ici.": return "فرصتك المهنية القادمة تبدأ من هنا";
+            case "Trouvez des opportunités près de chez vous, consultez les sources officielles et préparez votre profil candidat. Les employeurs peuvent aussi préparer leurs offres.": return "اكتشف فرص العمل بالقرب منك، وتصفّح المصادر الرسمية وأنشئ ملفك المهني. ويمكن للمؤسسات إعداد عروضها أيضاً.";
+            case "Je cherche un emploi": return "أبحث عن عمل";
+            case "Je propose un emploi": return "أعرض وظيفة";
+            case "Se connecter": return "تسجيل الدخول";
+            case "Créer un compte": return "إنشاء حساب";
+            case "Langue de l'application": return "لغة التطبيق";
+            case "Changer la langue": return "تغيير اللغة";
+            case "Votre carte candidat": return "بطاقتك المهنية";
+            case "Un profil clair pour présenter votre parcours professionnel.": return "ملف مهني واضح لعرض خبراتك ومسارك";
+            case "Aperçu de votre profil": return "معاينة ملفك الشخصي";
+            case "Modifier mes informations": return "تعديل معلوماتي";
+            case "Nom et prénom": return "الاسم واللقب";
+            case "Téléphone": return "الهاتف";
+            case "Adresse e-mail": return "البريد الإلكتروني";
+            case "Ville / gouvernorat": return "المدينة / الولاية";
+            case "Expérience et métier recherché": return "الخبرة والمهنة المطلوبة";
+            case "Formation / diplôme": return "التكوين / الشهادة";
+            case "Compétences": return "المهارات";
+            case "Disponibilité": return "التوفر";
+            case "Nom et prénom *": return "الاسم واللقب *";
+            case "Téléphone *": return "الهاتف *";
+            case "E-mail": return "البريد الإلكتروني";
+            case "Mot de passe": return "كلمة المرور";
+            case "Mot de passe (6 caractères minimum)": return "كلمة المرور (6 أحرف على الأقل)";
+            case "Ajouter / modifier ma photo": return "إضافة / تغيير صورتي";
+            case "Joindre mon CV (PDF ou document)": return "إرفاق سيرتي الذاتية";
+            case "Aucun CV sélectionné": return "لم يتم اختيار سيرة ذاتية";
+            case "CV enregistré sur cet appareil": return "تم حفظ السيرة الذاتية على هذا الجهاز";
+            case "Enregistrer mon profil sur ce téléphone": return "حفظ ملفي على هذا الهاتف";
+            case "Mes offres sauvegardées": return "عروض العمل المحفوظة";
+            case "Aucune offre sauvegardée pour le moment.": return "لا توجد عروض محفوظة حالياً";
+            case "Paramètres": return "الإعدادات";
+            case "Préférences de TUN-JOBS sur cet appareil.": return "إعدادات TUN-JOBS على هذا الجهاز";
+            case "Confidentialité": return "الخصوصية";
+            case "Retour aux emplois": return "العودة إلى الوظائف";
+            case "Accueil": return "الرئيسية";
+            case "Offres": return "العروض";
+            case "Profil": return "الملف الشخصي";
+            case "Employeurs": return "أصحاب العمل";
+            case "Plus": return "المزيد";
+            case "Menu TUN-JOBS": return "قائمة TUN-JOBS";
+            case "À propos": return "حول التطبيق";
+            case "Sites officiels de l'emploi": return "مواقع التشغيل الرسمية";
+            case "Bureaux régionaux": return "المكاتب الجهوية";
+            case "Retour": return "رجوع";
+            case "✓ SYNCHRONISÉ EN LIGNE": return "✓ تمت المزامنة";
+            case "⚠ ÉCHEC DE SYNCHRONISATION": return "⚠ فشلت المزامنة";
+            case "● ENREGISTRÉ LOCALEMENT • EN ATTENTE": return "● محفوظ محلياً • في انتظار المزامنة";
+            case "APERÇU PRIVÉ • À COMPLÉTER": return "معاينة خاصة • يرجى الإكمال";
+            case "Français": return "الفرنسية";
+            case "English": return "الإنجليزية";
+            case "العربية": return "العربية";
+            default: return value;
+        }
+    }
+
+    private void selectLanguage(Runnable refresh) {
+        String[] labels = {"Français", "English", "العربية"};
+        String[] codes = {"fr", "en", "ar"};
+        String current = getSharedPreferences("tun_jobs", MODE_PRIVATE).getString("language", "fr");
+        int selected = "ar".equals(current) ? 2 : ("en".equals(current) ? 1 : 0);
+        new AlertDialog.Builder(this)
+                .setTitle("Language / Langue / اللغة")
+                .setSingleChoiceItems(labels, selected, (dialog, which) -> {
+                    getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putString("language", codes[which]).apply();
+                    dialog.dismiss();
+                    refresh.run();
+                })
+                .setNegativeButton("Annuler", null)
+                .show();
+    }
+
+    private void openAccountFromWelcome(boolean create) {
+        getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
+        preferSignupOnAccount = create;
+        showAccount();
+    }
+
     private GradientDrawable shape(int color, int radiusDp) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
@@ -265,7 +354,7 @@ public class MainActivity extends Activity {
 
     private Button button(String label, boolean primary, Runnable action) {
         Button b = new Button(this);
-        b.setText(label);
+        b.setText(tr(label));
         b.setAllCaps(false);
         b.setTextSize(15);
         b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -316,7 +405,7 @@ public class MainActivity extends Activity {
 
     private TextView text(String value, int size, int color, boolean bold) {
         TextView v = new TextView(this);
-        v.setText(value);
+        v.setText(tr(value));
         v.setTextSize(size);
         v.setTextColor(color);
         if (bold) v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -362,6 +451,8 @@ public class MainActivity extends Activity {
         pendingRootScreen = false;
 
         root = column();
+        root.setLayoutDirection(isArabic() ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+        root.setTextDirection(isArabic() ? View.TEXT_DIRECTION_RTL : View.TEXT_DIRECTION_LTR);
         root.setBackgroundColor(canvas);
         setContentView(root);
         getWindow().setStatusBarColor(canvas);
@@ -1161,9 +1252,16 @@ public class MainActivity extends Activity {
         content.addView(text("Mot de passe", 13, muted, true));
         content.addView(password, new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 12);
-        content.addView(button("Se connecter", true, () -> submitAuth(email, password, false)), new LinearLayout.LayoutParams(-1, dp(54)));
-        space(content, 8);
-        content.addView(button("Créer un compte", false, () -> submitAuth(email, password, true)), new LinearLayout.LayoutParams(-1, dp(54)));
+        if (preferSignupOnAccount) {
+            content.addView(button("Créer un compte", true, () -> submitAuth(email, password, true)), new LinearLayout.LayoutParams(-1, dp(54)));
+            space(content, 8);
+            content.addView(button("Se connecter", false, () -> submitAuth(email, password, false)), new LinearLayout.LayoutParams(-1, dp(54)));
+        } else {
+            content.addView(button("Se connecter", true, () -> submitAuth(email, password, false)), new LinearLayout.LayoutParams(-1, dp(54)));
+            space(content, 8);
+            content.addView(button("Créer un compte", false, () -> submitAuth(email, password, true)), new LinearLayout.LayoutParams(-1, dp(54)));
+        }
+        preferSignupOnAccount = false;
         space(content, 12);
         content.addView(text("Après inscription, vérifiez votre boîte e-mail si la confirmation est demandée. N'utilisez pas le même mot de passe que vos autres services.", 12, muted, false));
     }
@@ -1297,7 +1395,8 @@ public class MainActivity extends Activity {
         android.content.SharedPreferences prefs = getSharedPreferences("tun_jobs", MODE_PRIVATE);
         content.addView(text("Langue de l'application", 20, ink, true));
         space(content, 8);
-        content.addView(text("La traduction complète en arabe, français et anglais sera ajoutée progressivement. Pour le moment, l'interface principale reste en français.", 15, muted, false));
+        content.addView(button("Changer la langue", false, () -> selectLanguage(this::showSettings)),
+                new LinearLayout.LayoutParams(-1, dp(54)));
         space(content, 16);
         content.addView(text("Confidentialité", 18, ink, true));
         space(content, 6);
@@ -1439,7 +1538,9 @@ public class MainActivity extends Activity {
         field.setMinimumHeight(0);
         field.setIncludeFontPadding(true);
         field.setGravity(Gravity.CENTER_VERTICAL);
-        field.setHint(hint);
+        field.setHint(tr(hint));
+        field.setLayoutDirection(isArabic() ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+        field.setGravity(isArabic() ? Gravity.CENTER_VERTICAL | Gravity.RIGHT : Gravity.CENTER_VERTICAL);
         field.setText(value);
         field.setPadding(dp(16), dp(6), dp(16), dp(6));
         field.setTextColor(ink);
@@ -1526,12 +1627,22 @@ public class MainActivity extends Activity {
     private void showWelcome() {
         prepareScreen(true, this::showWelcome);
         base("Bienvenue sur TUN-JOBS", "L'emploi et le recrutement, partout en Tunisie.", -1, true);
-        space(content, 26);
+        content.addView(button("Changer la langue", false, () -> selectLanguage(this::showWelcome)),
+                new LinearLayout.LayoutParams(-1, dp(48)));
+        space(content, 18);
         content.addView(text("Votre prochain emploi peut commencer ici.", 27, ink, true));
         space(content, 12);
         content.addView(text("Trouvez des opportunités près de chez vous, consultez les sources officielles et préparez votre profil candidat. Les employeurs peuvent aussi préparer leurs offres.", 16, muted, false));
-        space(content, 26);
-        content.addView(button("Je cherche un emploi", true, () -> {
+        space(content, 20);
+        content.addView(button("Se connecter", true, () -> openAccountFromWelcome(false)),
+                new LinearLayout.LayoutParams(-1, dp(56)));
+        space(content, 8);
+        content.addView(button("Créer un compte", false, () -> openAccountFromWelcome(true)),
+                new LinearLayout.LayoutParams(-1, dp(56)));
+        space(content, 18);
+        content.addView(text("Ou découvrir TUN-JOBS sans compte", 13, muted, true));
+        space(content, 12);
+        content.addView(button("Je cherche un emploi", false, () -> {
             getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
             employerMode = false;
             showHome();
@@ -1554,12 +1665,12 @@ public class MainActivity extends Activity {
         android.content.SharedPreferences p = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
         content.addView(text("Aperçu de votre profil", 20, ink, true));
         LinearLayout preview = column();
-        preview.setPadding(dp(18), dp(18), dp(18), dp(18));
-        preview.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {Color.rgb(57, 45, 25), Color.rgb(15, 17, 23), Color.rgb(8, 10, 14)}));
+        preview.setPadding(dp(10), dp(10), dp(10), dp(16));
+        preview.setBackground(shape(Color.rgb(25, 27, 33), 24));
+        FrameLayout hero = new FrameLayout(this);
         ImageView previewPhoto = new ImageView(this);
         previewPhoto.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        previewPhoto.setBackground(shape(Color.rgb(65, 80, 94), 22));
+        previewPhoto.setBackground(shape(Color.rgb(65, 80, 94), 18));
         Uri savedPhoto = savedProfileFileUri(p, "photo_file", "photo_uri", "profile-photo");
         if (savedPhoto != null) {
             previewPhoto.setImageURI(savedPhoto);
@@ -1567,22 +1678,44 @@ public class MainActivity extends Activity {
             previewPhoto.setImageResource(android.R.drawable.ic_menu_camera);
             previewPhoto.setColorFilter(Color.WHITE);
         }
-        LinearLayout.LayoutParams previewPhotoParams = new LinearLayout.LayoutParams(dp(104), dp(104));
-        previewPhotoParams.gravity = Gravity.CENTER_HORIZONTAL;
-        preview.addView(previewPhoto, previewPhotoParams);
+        hero.addView(previewPhoto, new FrameLayout.LayoutParams(-1, dp(224)));
+        LinearLayout identity = column();
+        identity.setPadding(dp(16), dp(30), dp(16), dp(14));
+        identity.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {0x00000000, 0xE8000000}));
+        identity.addView(text(p.getString("name", "Votre nom"), 25, Color.WHITE, true));
+        identity.addView(text(p.getString("experience", "Métier recherché / expérience"), 15, Color.WHITE, true));
+        FrameLayout.LayoutParams identityParams = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        hero.addView(identity, identityParams);
+        preview.addView(hero, new LinearLayout.LayoutParams(-1, dp(224)));
         space(preview, 12);
-        preview.addView(text(p.getString("name", "Votre nom"), 23, Color.WHITE, true));
-        space(preview, 4);
-        preview.addView(text(p.getString("experience", "Métier recherché / expérience"), 15, Color.WHITE, true));
-        preview.addView(text(p.getString("city", "Kasserine") + " • Tunisie", 13, Color.rgb(225, 235, 242), false));
-        space(preview, 8);
-        preview.addView(text(p.getString("skills", "Ajoutez vos compétences pour compléter votre carte."), 13, Color.WHITE, false));
+        preview.addView(text("📍  " + p.getString("city", "Kasserine") + " • Tunisie", 14, Color.WHITE, true));
+        space(preview, 7);
+        String educationPreview = p.getString("education", "");
+        if (!educationPreview.trim().isEmpty()) {
+            preview.addView(text("🎓  " + educationPreview, 13, Color.rgb(218, 222, 230), false));
+            space(preview, 6);
+        }
+        String skillsPreview = p.getString("skills", "");
+        if (!skillsPreview.trim().isEmpty()) {
+            preview.addView(text("COMPÉTENCES  •  " + skillsPreview, 13, Color.rgb(218, 222, 230), false));
+            space(preview, 6);
+        } else {
+            preview.addView(text("Ajoutez vos compétences pour compléter votre carte.", 13, muted, false));
+        }
+        String availabilityPreview = p.getString("availability", "");
+        if (!availabilityPreview.trim().isEmpty()) {
+            space(preview, 8);
+            preview.addView(chip("●  " + availabilityPreview, true));
+        }
         space(preview, 10);
         String syncState = p.getString("sync_status", "local");
         String syncLabel = "online".equals(syncState) ? "✓ SYNCHRONISÉ EN LIGNE"
                 : ("failed".equals(syncState) ? "⚠ ÉCHEC DE SYNCHRONISATION"
                 : (p.getBoolean("profile_saved", false) ? "● ENREGISTRÉ LOCALEMENT • EN ATTENTE" : "APERÇU PRIVÉ • À COMPLÉTER"));
         preview.addView(text(syncLabel, 11, "online".equals(syncState) ? Color.rgb(100, 220, 150) : Color.rgb(255, 205, 92), true));
+        space(preview, 8);
+        preview.addView(text("E-mail et CV restent masqués dans cet aperçu public.", 12, muted, false));
         content.addView(preview);
         space(content, 18);
         content.addView(text("Modifier mes informations", 20, gold, true));
