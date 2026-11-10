@@ -273,6 +273,7 @@ public class MainActivity extends Activity {
                 case "Joindre mon CV (PDF ou document)": return "Attach my CV";
                 case "Aucun CV sélectionné": return "No CV selected";
                 case "CV enregistré sur cet appareil": return "CV saved on this device";
+                case "CV synchronisé dans votre espace privé": return "CV synced to your private space";
                 case "Enregistrer mon profil sur ce téléphone": return "Save my profile on this phone";
                 case "Mes offres sauvegardées": return "My saved jobs";
                 case "Aucune offre sauvegardée pour le moment.": return "No saved jobs yet.";
@@ -334,6 +335,7 @@ public class MainActivity extends Activity {
             case "Ajouter / modifier ma photo": return "إضافة / تغيير صورتي";
             case "Joindre mon CV (PDF ou document)": return "إرفاق سيرتي الذاتية";
             case "Aucun CV sélectionné": return "لم يتم اختيار سيرة ذاتية";
+            case "CV synchronisé dans votre espace privé": return "تمت مزامنة السيرة الذاتية في مساحتك الخاصة";
             case "CV enregistré sur cet appareil": return "تم حفظ السيرة الذاتية على هذا الجهاز";
             case "Enregistrer mon profil sur ce téléphone": return "حفظ ملفي على هذا الهاتف";
             case "Mes offres sauvegardées": return "عروض العمل المحفوظة";
@@ -1342,8 +1344,19 @@ public class MainActivity extends Activity {
         }
         Toast.makeText(this, "Synchronisation du profil…", Toast.LENGTH_SHORT).show();
         authExecutor.execute(() -> {
+            android.content.SharedPreferences assetPrefs = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
+            String photoPath = assetPrefs.getString("photo_remote_path", "");
+            String cvPath = assetPrefs.getString("cv_remote_path", "");
             SupabaseProfile.Result result = SupabaseProfile.upsert(
-                    userId, token, fullName, phone, email, city, profession, education, skills, availability);
+                    userId, token, fullName, phone, email, city, profession, education, skills, availability,
+                    photoPath, cvPath);
+            if (result.ok) {
+                try { syncPendingProfileAssets(userId, token); }
+                catch (Exception assetError) {
+                    getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit()
+                            .putString("asset_sync_status", "pending").apply();
+                }
+            }
             runOnUiThread(() -> {
                 if (isFinishing()) return;
                 getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit()
@@ -1365,6 +1378,22 @@ public class MainActivity extends Activity {
             try {
                 SupabaseProfile.ProfileData remote = SupabaseProfile.fetch(userId, token);
                 if (remote == null) return;
+                File downloadedPhoto = null;
+                if (remote.photoPath != null && !remote.photoPath.isEmpty()) {
+                    File target = new File(getFilesDir(), "profile-photo-cloud" + SupabaseStorage.extensionForPath(remote.photoPath));
+                    if (SupabaseStorage.downloadPublicPhoto(remote.photoPath, target)) downloadedPhoto = target;
+                }
+                File downloadedCv = null;
+                if (remote.cvPath != null && !remote.cvPath.isEmpty()) {
+                    android.content.SharedPreferences local = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
+                    String localCv = local.getString("cv_file", "");
+                    if (localCv.isEmpty() || !new File(getFilesDir(), localCv).exists()) {
+                        File target = new File(getFilesDir(), "profile-cv-cloud" + SupabaseStorage.extensionForPath(remote.cvPath));
+                        if (SupabaseStorage.downloadPrivateCv(remote.cvPath, target, token)) downloadedCv = target;
+                    }
+                }
+                final File cloudPhoto = downloadedPhoto;
+                final File cloudCv = downloadedCv;
                 runOnUiThread(() -> {
                     if (isFinishing()) return;
                     android.content.SharedPreferences.Editor e = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
@@ -1372,8 +1401,13 @@ public class MainActivity extends Activity {
                             .putString("email", remote.email).putString("city", remote.city).putString("experience", remote.profession)
                             .putString("education", remote.education).putString("skills", remote.skills)
                             .putString("availability", remote.availability)
+                            .putString("photo_remote_path", remote.photoPath == null ? "" : remote.photoPath)
+                            .putString("cv_remote_path", remote.cvPath == null ? "" : remote.cvPath)
                             .putBoolean("profile_saved", true).putString("sync_status", "online")
-                            .putLong("profile_updated_at", System.currentTimeMillis()).apply();
+                            .putLong("profile_updated_at", System.currentTimeMillis());
+                    if (cloudPhoto != null) e.putString("photo_file", cloudPhoto.getName());
+                    if (cloudCv != null) e.putString("cv_file", cloudCv.getName());
+                    e.apply();
                     if (profileVisible) showProfile();
                 });
             } catch (Exception ignored) {
@@ -1465,7 +1499,7 @@ public class MainActivity extends Activity {
         space(content, 16);
         content.addView(text("Confidentialité", 18, ink, true));
         space(content, 6);
-        content.addView(text("Votre profil, votre photo, votre CV et les brouillons restent enregistrés localement pour le moment. La connexion Supabase par e-mail est disponible ; la synchronisation et la publication en ligne sont en cours d’intégration.", 14, muted, false));
+        content.addView(text("Les informations du profil sont synchronisées avec Supabase. La photo est publique (nom et ville visibles). L’e-mail et le CV restent privés ; l’accès est réservé au candidat et aux employeurs vérifiés ayant une offre publiée.", 14, muted, false));
         space(content, 16);
         content.addView(button("Réafficher l'écran de bienvenue au prochain lancement", false, () -> {
             prefs.edit().putBoolean("welcome_done", false).apply();
@@ -1673,8 +1707,8 @@ public class MainActivity extends Activity {
             return;
         }
         android.content.SharedPreferences.Editor edit = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
-        if (requestCode == PICK_PROFILE_PHOTO) edit.putString("photo_file", copied).remove("photo_uri");
-        if (requestCode == PICK_PROFILE_CV) edit.putString("cv_file", copied).remove("cv_uri");
+        if (requestCode == PICK_PROFILE_PHOTO) edit.putString("photo_file", copied).remove("photo_uri").remove("photo_remote_path");
+        if (requestCode == PICK_PROFILE_CV) edit.putString("cv_file", copied).remove("cv_uri").remove("cv_remote_path");
         if (!edit.commit()) {
             Toast.makeText(this, "Le fichier est copié, mais l'enregistrement du profil a échoué.", Toast.LENGTH_LONG).show();
             return;
@@ -1687,6 +1721,66 @@ public class MainActivity extends Activity {
         if (requestCode == PICK_PROFILE_CV && profileCvLabel != null) profileCvLabel.setText("CV enregistré sur cet appareil");
         Toast.makeText(this, requestCode == PICK_PROFILE_PHOTO
                 ? "Photo enregistrée sur cet appareil." : "CV enregistré sur cet appareil.", Toast.LENGTH_SHORT).show();
+        syncSelectedProfileAsset(copied, requestCode);
+    }
+
+    private void syncSelectedProfileAsset(String localName, int requestCode) {
+        String token = SecureSessionStore.read(this);
+        String userId = getSharedPreferences("tun_jobs_account", MODE_PRIVATE).getString("user_id", "");
+        if (token.isEmpty() || userId.isEmpty()) {
+            Toast.makeText(this, "Fichier conservé sur le téléphone. Connectez-vous puis enregistrez votre profil pour le synchroniser.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this, "Envoi du fichier vers votre espace sécurisé…", Toast.LENGTH_SHORT).show();
+        authExecutor.execute(() -> {
+            try {
+                syncPendingProfileAssets(userId, token);
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    if (profileVisible) showProfile();
+                    Toast.makeText(this, requestCode == PICK_PROFILE_PHOTO
+                            ? "Photo synchronisée dans le profil public."
+                            : "CV synchronisé dans l'espace privé.", Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit()
+                            .putString("asset_sync_status", "pending").apply();
+                    Toast.makeText(this, "Fichier gardé sur le téléphone ; synchronisation impossible : "
+                            + error.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        });
+    }
+
+    private void syncPendingProfileAssets(String userId, String token) throws Exception {
+        android.content.SharedPreferences prefs = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
+        String photoPath = prefs.getString("photo_remote_path", "");
+        String cvPath = prefs.getString("cv_remote_path", "");
+        String localPhoto = prefs.getString("photo_file", "");
+        String localCv = prefs.getString("cv_file", "");
+        if (photoPath.isEmpty() && !localPhoto.isEmpty()) {
+            File file = new File(getFilesDir(), localPhoto);
+            if (file.isFile()) {
+                photoPath = SupabaseStorage.upload(file, "candidate-photos", userId, token, "image/jpeg");
+                SupabaseProfile.updateAssetPaths(userId, token, photoPath, cvPath);
+                prefs.edit().putString("photo_remote_path", photoPath).apply();
+            }
+        }
+        if (cvPath.isEmpty() && !localCv.isEmpty()) {
+            File file = new File(getFilesDir(), localCv);
+            if (file.isFile()) {
+                String lower = localCv.toLowerCase(Locale.ROOT);
+                String mime = lower.endsWith(".pdf") ? "application/pdf"
+                        : (lower.endsWith(".docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/msword");
+                cvPath = SupabaseStorage.upload(file, "candidate-cvs", userId, token, mime);
+                SupabaseProfile.updateAssetPaths(userId, token, photoPath, cvPath);
+                prefs.edit().putString("cv_remote_path", cvPath).apply();
+            }
+        }
+        prefs.edit().putString("asset_sync_status",
+                (!photoPath.isEmpty() || !cvPath.isEmpty()) ? "online" : "pending").apply();
     }
 
     private void showWelcome() {
@@ -1823,7 +1917,9 @@ public class MainActivity extends Activity {
         }
 
         Uri cvUri = savedProfileFileUri(p, "cv_file", "cv_uri", "profile-cv");
-        profileCvLabel = text(cvUri == null ? "Aucun CV sélectionné" : "CV enregistré sur cet appareil", 14, muted, false);
+        boolean cvInCloud = !p.getString("cv_remote_path", "").isEmpty();
+        profileCvLabel = text(cvUri != null ? "CV enregistré sur cet appareil"
+                : (cvInCloud ? "CV synchronisé dans votre espace privé" : "Aucun CV sélectionné"), 14, muted, false);
         content.addView(profileCvLabel);
         space(content, 6);
         content.addView(button("Joindre mon CV (PDF ou document)", false, () -> pickProfileFile(PICK_PROFILE_CV, "application/pdf")),
@@ -1858,7 +1954,7 @@ public class MainActivity extends Activity {
         }), new LinearLayout.LayoutParams(-1, dp(60)));
         space(content, 8);
         content.addView(text("État du profil : " + ("online".equals(p.getString("sync_status", "local")) ? "synchronisé en ligne" : "enregistré localement, synchronisation en attente").toUpperCase(Locale.ROOT)
-                + ". La photo et le CV restent privés sur cet appareil et ne sont pas envoyés à Supabase.", 13, muted, false));
+                + ". La photo est publiée dans votre profil ; le CV est synchronisé dans un espace privé lorsque vous êtes connecté.", 13, muted, false));
 
         space(content, 22);
         content.addView(text("Mes offres sauvegardées", 20, ink, true));
