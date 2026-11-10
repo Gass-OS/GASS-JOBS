@@ -27,7 +27,6 @@ create table if not exists public.candidate_cards (
 create table if not exists public.candidate_private (
   user_id uuid primary key references auth.users(id) on delete cascade,
   phone text,
-  email text,
   updated_at timestamptz not null default now()
 );
 
@@ -191,7 +190,8 @@ create policy "candidate and applicant employer read photo" on storage.objects f
 using (bucket_id = 'candidate-photos' and (
   (storage.foldername(name))[1] = auth.uid()::text
   or exists (select 1 from public.applications a join public.jobs j on j.id = a.job_id
-    where a.candidate_id::text = (storage.foldername(name))[1] and j.employer_id = auth.uid())
+    join public.candidate_cards cc on cc.user_id = a.candidate_id
+    where a.candidate_id::text = (storage.foldername(name))[1] and j.employer_id = auth.uid() and cc.discoverable = true)
 ));
 drop policy if exists "candidate uploads own cv" on storage.objects;
 create policy "candidate uploads own cv" on storage.objects for insert to authenticated
