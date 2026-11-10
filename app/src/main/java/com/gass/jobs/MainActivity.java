@@ -26,6 +26,10 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -1208,22 +1212,68 @@ public class MainActivity extends Activity {
         startActivityForResult(intent, requestCode);
     }
 
+    // Keep selected media in app-private storage so it remains readable after restart,
+    // even if Android's document provider later revokes or changes the original URI.
+    private String copyProfileFile(Uri source, String fileName) {
+        File target = new File(getFilesDir(), fileName);
+        try (InputStream in = getContentResolver().openInputStream(source);
+             OutputStream out = new FileOutputStream(target, false)) {
+            if (in == null) return "";
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+            out.flush();
+            return fileName;
+        } catch (Exception e) {
+            if (target.exists()) target.delete();
+            return "";
+        }
+    }
+
+    private Uri savedProfileFileUri(android.content.SharedPreferences prefs, String fileKey,
+                                    String legacyUriKey, String privateName) {
+        String stored = prefs.getString(fileKey, "");
+        if (!stored.isEmpty()) {
+            File file = new File(getFilesDir(), stored);
+            if (file.exists()) return Uri.fromFile(file);
+        }
+        // Migrate profiles created by earlier builds that stored a document-provider URI.
+        String legacy = prefs.getString(legacyUriKey, "");
+        if (!legacy.isEmpty()) {
+            String copied = copyProfileFile(Uri.parse(legacy), privateName);
+            if (!copied.isEmpty()) {
+                prefs.edit().putString(fileKey, copied).remove(legacyUriKey).commit();
+                return Uri.fromFile(new File(getFilesDir(), copied));
+            }
+        }
+        return null;
+    }
+
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
-        Uri uri = data.getData();
-        try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
-        catch (Exception ignored) { }
+        Uri selected = data.getData();
+        String storedName = requestCode == PICK_PROFILE_PHOTO ? "profile-photo" : "profile-cv";
+        String copied = copyProfileFile(selected, storedName);
+        if (copied.isEmpty()) {
+            Toast.makeText(this, "Impossible d'enregistrer le fichier. Choisissez un autre document.", Toast.LENGTH_LONG).show();
+            return;
+        }
         android.content.SharedPreferences.Editor edit = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
-        if (requestCode == PICK_PROFILE_PHOTO) edit.putString("photo_uri", uri.toString());
-        if (requestCode == PICK_PROFILE_CV) edit.putString("cv_uri", uri.toString());
-        edit.apply();
+        if (requestCode == PICK_PROFILE_PHOTO) edit.putString("photo_file", copied).remove("photo_uri");
+        if (requestCode == PICK_PROFILE_CV) edit.putString("cv_file", copied).remove("cv_uri");
+        if (!edit.commit()) {
+            Toast.makeText(this, "Le fichier est copié, mais l'enregistrement du profil a échoué.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Uri privateUri = Uri.fromFile(new File(getFilesDir(), copied));
         if (requestCode == PICK_PROFILE_PHOTO && profilePhotoView != null) {
             profilePhotoView.clearColorFilter();
-            profilePhotoView.setImageURI(uri);
+            profilePhotoView.setImageURI(privateUri);
         }
-        if (requestCode == PICK_PROFILE_CV && profileCvLabel != null) profileCvLabel.setText("CV ajouté : " + uri.getLastPathSegment());
-        Toast.makeText(this, requestCode == PICK_PROFILE_PHOTO ? "Photo sélectionnée." : "CV sélectionné.", Toast.LENGTH_SHORT).show();
+        if (requestCode == PICK_PROFILE_CV && profileCvLabel != null) profileCvLabel.setText("CV enregistré sur cet appareil");
+        Toast.makeText(this, requestCode == PICK_PROFILE_PHOTO
+                ? "Photo enregistrée sur cet appareil." : "CV enregistré sur cet appareil.", Toast.LENGTH_SHORT).show();
     }
 
     private void showWelcome() {
@@ -1262,9 +1312,9 @@ public class MainActivity extends Activity {
         ImageView previewPhoto = new ImageView(this);
         previewPhoto.setScaleType(ImageView.ScaleType.CENTER_CROP);
         previewPhoto.setBackground(shape(Color.rgb(65, 80, 94), 22));
-        String savedPhoto = p.getString("photo_uri", "");
-        if (!savedPhoto.isEmpty()) {
-            try { previewPhoto.setImageURI(Uri.parse(savedPhoto)); } catch (Exception ignored) { }
+        Uri savedPhoto = savedProfileFileUri(p, "photo_file", "photo_uri", "profile-photo");
+        if (savedPhoto != null) {
+            previewPhoto.setImageURI(savedPhoto);
         } else {
             previewPhoto.setImageResource(android.R.drawable.ic_menu_camera);
             previewPhoto.setColorFilter(Color.WHITE);
@@ -1289,9 +1339,9 @@ public class MainActivity extends Activity {
         profilePhotoView = photo;
         photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
         photo.setBackground(shape(panel, 18));
-        String photoUri = p.getString("photo_uri", "");
-        if (!photoUri.isEmpty()) {
-            try { photo.setImageURI(Uri.parse(photoUri)); } catch (Exception ignored) { }
+        Uri photoUri = savedProfileFileUri(p, "photo_file", "photo_uri", "profile-photo");
+        if (photoUri != null) {
+            photo.setImageURI(photoUri);
         } else {
             photo.setImageResource(android.R.drawable.ic_menu_camera);
             photo.setColorFilter(muted);
@@ -1322,8 +1372,8 @@ public class MainActivity extends Activity {
             space(content, 10);
         }
 
-        String cvUri = p.getString("cv_uri", "");
-        profileCvLabel = text(cvUri.isEmpty() ? "Aucun CV sélectionné" : "CV ajouté : " + Uri.parse(cvUri).getLastPathSegment(), 14, muted, false);
+        Uri cvUri = savedProfileFileUri(p, "cv_file", "cv_uri", "profile-cv");
+        profileCvLabel = text(cvUri == null ? "Aucun CV sélectionné" : "CV enregistré sur cet appareil", 14, muted, false);
         content.addView(profileCvLabel);
         space(content, 6);
         content.addView(button("Joindre mon CV (PDF ou document)", false, () -> pickProfileFile(PICK_PROFILE_CV, "application/pdf")),
@@ -1337,11 +1387,15 @@ public class MainActivity extends Activity {
             android.content.SharedPreferences.Editor e = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
             String[] keys = {"name","phone","email","city","experience","education","skills","availability"};
             for (int i=0;i<fields.length;i++) e.putString(keys[i], fields[i].getText().toString().trim());
-            e.putBoolean("profile_saved", true).apply();
-            Toast.makeText(this, "Profil enregistré uniquement sur cet appareil.", Toast.LENGTH_LONG).show();
+            e.putBoolean("profile_saved", true);
+            e.putLong("profile_updated_at", System.currentTimeMillis());
+            boolean stored = e.commit();
+            Toast.makeText(this, stored
+                    ? "Profil et informations enregistrés sur cet appareil."
+                    : "Erreur : le profil n'a pas pu être enregistré.", Toast.LENGTH_LONG).show();
         }), new LinearLayout.LayoutParams(-1, dp(60)));
         space(content, 8);
-        content.addView(text("Confidentialité : vos informations, votre photo et votre CV restent sur ce téléphone. Ils ne sont pas envoyés ni publiés. Le partage avec les employeurs sera activé uniquement après mise en place d'un service sécurisé et avec votre accord.", 13, muted, false));
+        content.addView(text("Enregistrement local : vos informations sont conservées dans l'application et votre photo / CV sont copiés dans son espace privé. Ils restent disponibles après fermeture et redémarrage de l'application. Rien n'est envoyé ni publié.", 13, muted, false));
 
         space(content, 22);
         content.addView(text("Mes offres sauvegardées", 20, ink, true));
