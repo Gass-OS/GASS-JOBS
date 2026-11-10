@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.view.MotionEvent;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -47,6 +48,8 @@ public class MainActivity extends Activity {
     private static final int PICK_PROFILE_CV = 7102;
     private ImageView profilePhotoView;
     private TextView profileCvLabel;
+    private int swipeIndex = 0;
+    private final ArrayList<Job> visibleJobs = new ArrayList<Job>();
 
     private static class Job {
         final String title, company, location, governorate, sector, contract, description;
@@ -245,29 +248,90 @@ public class MainActivity extends Activity {
         root.addView(nav);
     }
 
-    private void card(Job job) {
+    private void card(Job job, int position, int total) {
         LinearLayout c = column();
-        c.setPadding(17, 15, 17, 15);
-        c.setBackground(shape(Color.WHITE, 18));
-        c.addView(text(job.title, 18, ink, true));
-        space(c, 5);
-        c.addView(text(job.company + "  •  " + job.location + " (" + job.governorate + ")", 13, muted, false));
-        space(c, 10);
-        c.addView(text(job.sector + " • " + job.contract, 12, green, true));
-        space(c, 8);
-        c.addView(text(job.description, 14, ink, false));
-        space(c, 12);
+        c.setPadding(0, 0, 0, 0);
+        c.setBackground(shape(Color.WHITE, 24));
+        c.setClipToOutline(true);
+
+        LinearLayout hero = column();
+        hero.setPadding(20, 20, 20, 20);
+        hero.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[] {Color.rgb(20, 31, 48), Color.rgb(0, 112, 87)}));
+        hero.addView(text("TUN-JOBS  •  OPPORTUNITÉ", 12, Color.rgb(255, 205, 92), true));
+        space(hero, 22);
+        hero.addView(text(job.title, 27, Color.WHITE, true));
+        space(hero, 8);
+        hero.addView(text(job.company, 16, Color.WHITE, true));
+        space(hero, 4);
+        hero.addView(text("⌖  " + job.location + " • " + job.governorate, 14, Color.rgb(224, 235, 242), false));
+        space(hero, 16);
+        LinearLayout chips = row();
+        TextView sectorChip = text(job.sector, 12, Color.WHITE, true);
+        sectorChip.setBackground(shape(Color.rgb(0, 145, 105), 20));
+        sectorChip.setPadding(12, 7, 12, 7);
+        TextView contractChip = text(job.contract, 12, Color.WHITE, true);
+        contractChip.setBackground(shape(Color.rgb(66, 79, 96), 20));
+        contractChip.setPadding(12, 7, 12, 7);
+        chips.addView(sectorChip);
+        space(chips, 0);
+        LinearLayout.LayoutParams chipParams = (LinearLayout.LayoutParams) contractChip.getLayoutParams();
+        chips.addView(contractChip);
+        hero.addView(chips);
+        c.addView(hero);
+
+        LinearLayout details = column();
+        details.setPadding(20, 16, 20, 18);
+        details.addView(text("À propos du poste", 17, ink, true));
+        space(details, 6);
+        details.addView(text(job.description, 14, muted, false));
+        space(details, 14);
+        details.addView(text((position + 1) + " / " + total + " • Exemple de démonstration — annonce fictive", 12, muted, false));
+        space(details, 12);
+
         LinearLayout actions = row();
-        actions.addView(button("Voir l'offre", true, () -> showJob(job.title, job.company, job.location, job.description)),
-                new LinearLayout.LayoutParams(0, 48, 1));
-        Set<String> saved = new HashSet<String>(getSharedPreferences("gass_jobs_saved", MODE_PRIVATE)
-                .getStringSet("keys", new HashSet<String>()));
-        boolean isSaved = saved.contains(job.key());
-        actions.addView(button(isSaved ? "Enregistré ✓" : "Enregistrer", false, () -> toggleSaved(job)),
-                new LinearLayout.LayoutParams(0, 56, 1));
-        c.addView(actions);
+        Button pass = button("✕  Passer", false, () -> {
+            swipeIndex++;
+            renderJobs();
+        });
+        Button save = button("★  Sauvegarder", false, () -> {
+            toggleSaved(job);
+            swipeIndex++;
+            renderJobs();
+        });
+        Button detailsButton = button("Voir", true, () -> showJob(job.title, job.company, job.location, job.description));
+        actions.addView(pass, new LinearLayout.LayoutParams(0, 48, 1));
+        actions.addView(save, new LinearLayout.LayoutParams(0, 48, 1));
+        details.addView(actions);
+        space(details, 8);
+        details.addView(detailsButton, new LinearLayout.LayoutParams(-1, 48));
+        c.addView(details);
+
+        final float[] downX = {0f};
+        c.setOnTouchListener((view, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                downX[0] = event.getX();
+                return true;
+            }
+            if (event.getAction() == MotionEvent.ACTION_UP) {
+                float delta = event.getX() - downX[0];
+                if (Math.abs(delta) > 85f) {
+                    view.animate().translationX(delta > 0 ? 520f : -520f).alpha(0.25f).setDuration(150)
+                            .withEndAction(() -> {
+                                view.setTranslationX(0f);
+                                view.setAlpha(1f);
+                                if (delta > 0) toggleSaved(job);
+                                swipeIndex++;
+                                renderJobs();
+                            }).start();
+                } else view.performClick();
+                return true;
+            }
+            return true;
+        });
         content.addView(c);
-        space(content, 12);
+        space(content, 10);
+        content.addView(text("Glissez à gauche pour passer • à droite pour sauvegarder", 12, muted, false));
     }
 
     private void toggleSaved(Job job) {
@@ -316,13 +380,8 @@ public class MainActivity extends Activity {
         String governorate = selected(governorateFilter);
         String sector = selected(sectorFilter);
         String contract = selected(contractFilter);
+        visibleJobs.clear();
 
-        content.addView(text("Résultats de démonstration", 20, ink, true));
-        space(content, 5);
-        content.addView(text("Ces exemples sont fictifs : aucune candidature réelle n'est possible pour le moment.", 12, muted, false));
-        space(content, 12);
-
-        int count = 0;
         for (Job job : demoJobs) {
             String searchable = (job.title + " " + job.company + " " + job.location + " " + job.governorate + " "
                     + job.sector + " " + job.contract + " " + job.description).toLowerCase(Locale.ROOT);
@@ -330,13 +389,43 @@ public class MainActivity extends Activity {
             if (!"Tous".equals(governorate) && !job.governorate.equalsIgnoreCase(governorate)) continue;
             if (!"Tous".equals(sector) && !job.sector.equalsIgnoreCase(sector)) continue;
             if (!"Tous".equals(contract) && !job.contract.equalsIgnoreCase(contract)) continue;
-            card(job);
-            count++;
+            visibleJobs.add(job);
         }
-        if (count == 0) {
+
+        content.addView(text("Découvrir les offres", 20, ink, true));
+        space(content, 5);
+        content.addView(text("Un format de cartes à parcourir, inspiré des applications de rencontre professionnelle. Les annonces de démonstration sont fictives.", 12, muted, false));
+        space(content, 12);
+        if (visibleJobs.isEmpty()) {
             content.addView(text("Aucune offre ne correspond à ces filtres.", 15, muted, false));
+        } else if (swipeIndex >= visibleJobs.size()) {
+            content.addView(text("Vous avez parcouru toutes les offres de cette sélection.", 16, ink, true));
+            space(content, 8);
+            content.addView(button("Recommencer les cartes", true, () -> {
+                swipeIndex = 0;
+                renderJobs();
+            }));
         } else {
-            content.addView(text(count + " résultat(s)", 12, muted, false));
+            card(visibleJobs.get(swipeIndex), swipeIndex, visibleJobs.size());
+            space(content, 8);
+            content.addView(button("Voir toutes les offres en liste", false, () -> {
+                LinearLayout previous = content;
+                content = resultsContainer;
+                resultsContainer.removeAllViews();
+                for (Job job : visibleJobs) {
+                    LinearLayout item = column();
+                    item.setPadding(16, 14, 16, 14);
+                    item.setBackground(shape(Color.WHITE, 18));
+                    item.addView(text(job.title, 18, ink, true));
+                    space(item, 4);
+                    item.addView(text(job.company + " • " + job.location + " • " + job.sector, 13, muted, false));
+                    space(item, 8);
+                    item.addView(button("Voir l'offre", true, () -> showJob(job.title, job.company, job.location, job.description)));
+                    content.addView(item);
+                    space(content, 8);
+                }
+                content = previous;
+            }));
         }
         content = previousContent;
     }
@@ -357,17 +446,40 @@ public class MainActivity extends Activity {
         space(content, 18);
 
         if (employerMode) {
-            content.addView(text("Vous recrutez ?", 21, ink, true));
+            content.addView(text("Votre espace recruteur", 21, ink, true));
             space(content, 8);
             content.addView(text("Préparez une annonce pour les candidats de Kasserine et de toute la Tunisie. Votre brouillon reste uniquement sur cet appareil : il n'est pas publié ni transmis.", 14, muted, false));
             space(content, 14);
-            content.addView(button("Créer une offre", true, this::showEmployerDraft));
+            content.addView(button("＋  Créer une offre", true, this::showEmployerDraft), new LinearLayout.LayoutParams(-1, 54));
+            space(content, 14);
+            android.content.SharedPreferences draft = getSharedPreferences("gass_jobs_drafts", MODE_PRIVATE);
+            if (draft.contains("title")) {
+                LinearLayout offer = column();
+                offer.setPadding(18, 18, 18, 18);
+                offer.setBackground(shape(Color.rgb(22, 35, 52), 22));
+                offer.addView(text("APERÇU DE VOTRE OFFRE", 12, Color.rgb(255, 205, 92), true));
+                space(offer, 14);
+                offer.addView(text(draft.getString("title", "Votre poste"), 24, Color.WHITE, true));
+                space(offer, 6);
+                offer.addView(text(draft.getString("company", "Votre entreprise") + " • " + draft.getString("governorate", "Tunisie"), 14, Color.rgb(220, 230, 238), false));
+                space(offer, 10);
+                offer.addView(text(draft.getString("sector", "Secteur") + " • " + draft.getString("contract", "Contrat"), 13, Color.rgb(255, 205, 92), true));
+                space(offer, 8);
+                offer.addView(text(draft.getString("description", ""), 14, Color.WHITE, false));
+                space(offer, 12);
+                offer.addView(text("BROUILLON PRIVÉ • NON PUBLIÉ", 11, Color.rgb(255, 205, 92), true));
+                content.addView(offer);
+                space(content, 12);
+                content.addView(button("Modifier mon offre", false, this::showEmployerDraft));
+            } else {
+                content.addView(text("Votre première annonce apparaîtra ici sous forme de carte professionnelle. Elle restera privée jusqu'à la mise en place de la publication sécurisée.", 14, muted, false));
+            }
             space(content, 10);
             content.addView(button("Voir les sources officielles", false, () -> openExternal(MINISTRY_DIRECTORY)));
             return;
         }
 
-        content.addView(text("Rechercher une offre", 20, ink, true));
+        content.addView(text("Trouver votre prochain match professionnel", 20, ink, true));
         space(content, 8);
         searchInput = new EditText(this);
         searchInput.setSingleLine(true);
@@ -410,6 +522,7 @@ public class MainActivity extends Activity {
             governorateFilter.setSelection(0);
             sectorFilter.setSelection(0);
             contractFilter.setSelection(0);
+            swipeIndex = 0;
             renderJobs();
         }), new LinearLayout.LayoutParams(0, 44, 1));
         content.addView(filterActions);
@@ -654,9 +767,39 @@ public class MainActivity extends Activity {
 
     private void showProfile() {
         prepareScreen(true, this::showProfile);
-        base("Mon profil", "Préparez vos informations de candidat sur cet appareil.");
+        base("Votre carte candidat", "Un profil clair pour présenter votre parcours professionnel.");
+
         android.content.SharedPreferences p = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
-        content.addView(text("Informations personnelles", 20, ink, true));
+        content.addView(text("Aperçu de votre profil", 20, ink, true));
+        LinearLayout preview = column();
+        preview.setPadding(18, 18, 18, 18);
+        preview.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[] {Color.rgb(20, 31, 48), Color.rgb(0, 112, 87)}));
+        ImageView previewPhoto = new ImageView(this);
+        previewPhoto.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        previewPhoto.setBackground(shape(Color.rgb(65, 80, 94), 22));
+        String savedPhoto = p.getString("photo_uri", "");
+        if (!savedPhoto.isEmpty()) {
+            try { previewPhoto.setImageURI(Uri.parse(savedPhoto)); } catch (Exception ignored) { }
+        } else {
+            previewPhoto.setImageResource(android.R.drawable.ic_menu_camera);
+            previewPhoto.setColorFilter(Color.WHITE);
+        }
+        LinearLayout.LayoutParams previewPhotoParams = new LinearLayout.LayoutParams(104, 104);
+        previewPhotoParams.gravity = Gravity.CENTER_HORIZONTAL;
+        preview.addView(previewPhoto, previewPhotoParams);
+        space(preview, 12);
+        preview.addView(text(p.getString("name", "Votre nom"), 23, Color.WHITE, true));
+        space(preview, 4);
+        preview.addView(text(p.getString("experience", "Métier recherché / expérience"), 15, Color.WHITE, true));
+        preview.addView(text(p.getString("city", "Kasserine") + " • Tunisie", 13, Color.rgb(225, 235, 242), false));
+        space(preview, 8);
+        preview.addView(text(p.getString("skills", "Ajoutez vos compétences pour compléter votre carte."), 13, Color.WHITE, false));
+        space(preview, 10);
+        preview.addView(text(p.getBoolean("profile_saved", false) ? "PROFIL ENREGISTRÉ SUR CET APPAREIL" : "APERÇU PRIVÉ • À COMPLÉTER", 11, Color.rgb(255, 205, 92), true));
+        content.addView(preview);
+        space(content, 18);
+        content.addView(text("Modifier mes informations", 20, ink, true));
         space(content, 8);
         ImageView photo = new ImageView(this);
         profilePhotoView = photo;
