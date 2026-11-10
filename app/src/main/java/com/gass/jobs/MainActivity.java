@@ -132,7 +132,7 @@ public class MainActivity extends Activity {
     private static final String OPEN_DATA_DIRECTORY =
             "https://catalog.data.gov.tn/fr/dataset/reseau-de-bureaux-de-l-emploi-et-du-travail-independant-en-tunisie";
     private static final String ANETI_TUNISIA_OFFERS =
-            "https://www.emploi.nat.tn/";
+            "https://www.emploi.nat.tn/fo/Fr2026/global.php?menu1=171";
     private static final String ANETI_INTERNATIONAL_OFFERS =
             "https://www.aneti-international.tn/index.php/offres";
 
@@ -155,6 +155,30 @@ public class MainActivity extends Activity {
                 "Hôtellerie • Services", "À vérifier sur l'annonce",
                 "Publié le 22/10/2026. Offre publiée dans la liste officielle ANETI International. Ouvrez la fiche source pour consulter les missions, le profil recherché et les modalités de candidature.",
                 "https://www.aneti-international.tn/node/1064776", "22/10/2026"));
+        add(new Job("Chaudronnier aéronautique expérimenté", "ANETI — Emploi international", "France", "International",
+                "Mécanique • Industrie", "CDI",
+                "Publié le 26/10/2026. Offre affichée dans la liste publique ANETI International. Consultez l'annonce originale pour le profil, les compétences et les modalités.",
+                "https://www.aneti-international.tn/node/1067610", "26/10/2026"));
+        add(new Job("Rectifieurs cylindriques", "ANETI — Emploi international", "France", "International",
+                "Mécanique • Industrie", "CDI",
+                "Publié le 26/10/2026. Offre affichée dans la liste publique ANETI International. Consultez l'annonce originale pour le profil, les compétences et les modalités.",
+                "https://www.aneti-international.tn/node/1067617", "26/10/2026"));
+        add(new Job("Régleurs tournage multi-broches CN", "ANETI — Emploi international", "France", "International",
+                "Mécanique • Maintenance", "CDI",
+                "Publié le 26/10/2026. Réglage de machines de tournage CN, lecture de plans et contrôle dimensionnel. La fiche source indique 5 ans minimum d'expérience en usinage de précision, horaires d'équipe et français requis.",
+                "https://www.aneti-international.tn/node/1067623", "26/10/2026"));
+        add(new Job("Techniciens usinage fraisage CN 5 axes", "ANETI — Emploi international", "France", "International",
+                "Mécanique • Industrie", "À vérifier sur l'annonce",
+                "Publié le 26/10/2026. Offre affichée dans la liste publique ANETI International. Consultez l'annonce originale pour le profil, les compétences et les modalités.",
+                "https://www.aneti-international.tn/node/1067631", "26/10/2026"));
+        add(new Job("Soudeur certifié aéronautique", "ANETI — Emploi international", "France", "International",
+                "Mécanique • Soudure", "CDI",
+                "Publié le 26/10/2026. Offre affichée dans la liste publique ANETI International. Consultez l'annonce originale pour les certifications demandées, le profil et les modalités.",
+                "https://www.aneti-international.tn/node/1067652", "26/10/2026"));
+        add(new Job("Ajusteurs monteurs aéronautique", "ANETI — Emploi international", "France", "International",
+                "Aéronautique • Industrie", "CDI",
+                "Publié le 28/10/2026. Offre affichée dans la liste publique ANETI International. Consultez l'annonce originale pour le profil, les compétences et les modalités.",
+                "https://www.aneti-international.tn/node/1069379", "28/10/2026"));
     }};
 
     @Override public void onCreate(Bundle state) {
