@@ -840,7 +840,17 @@ public class MainActivity extends Activity {
         switcher.addView(segment("▣  Propose un emploi", employerMode, () -> { employerMode = true; showHome(); }),
                 new LinearLayout.LayoutParams(0, dp(44), 1));
         content.addView(switcher, new LinearLayout.LayoutParams(-1, -2));
-        space(content, 10);
+        space(content, 8);
+        if (!employerMode) {
+            content.addView(button("🇹🇳  Offres ANETI en Tunisie", false,
+                    () -> openExternal(ANETI_TUNISIA_OFFERS)),
+                    new LinearLayout.LayoutParams(-1, dp(46)));
+            space(content, 6);
+            content.addView(text("Cartes suivantes : offres ANETI International publiées par la source officielle. Vérifiez la disponibilité et les délais sur chaque annonce.", 11, muted, false));
+        } else {
+            content.addView(text("Profils candidats de démonstration — aucun profil réel n'est publié.", 11, muted, false));
+        }
+        space(content, 8);
 
         deckHolder = new FrameLayout(this);
         content.addView(deckHolder, new LinearLayout.LayoutParams(-1, 0, 1));
