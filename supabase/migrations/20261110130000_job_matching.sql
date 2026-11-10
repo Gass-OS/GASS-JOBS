@@ -28,6 +28,11 @@ create table if not exists public.candidate_private (
   user_id uuid primary key references auth.users(id) on delete cascade,
   phone text,
   email text,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.candidate_documents (
+  user_id uuid primary key references auth.users(id) on delete cascade,
   cv_path text,
   updated_at timestamptz not null default now()
 );
@@ -78,6 +83,7 @@ create index if not exists applications_job_idx on public.applications(job_id, c
 alter table public.employer_accounts enable row level security;
 alter table public.candidate_cards enable row level security;
 alter table public.candidate_private enable row level security;
+alter table public.candidate_documents enable row level security;
 alter table public.jobs enable row level security;
 alter table public.applications enable row level security;
 alter table public.application_consents enable row level security;
@@ -121,6 +127,11 @@ create policy "candidate creates own private details" on public.candidate_privat
 drop policy if exists "candidate updates own private details" on public.candidate_private;
 create policy "candidate updates own private details" on public.candidate_private for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+drop policy if exists "candidate reads own document record" on public.candidate_documents;
+create policy "candidate reads own document record" on public.candidate_documents for select to authenticated using (user_id = auth.uid());
+drop policy if exists "candidate writes own document record" on public.candidate_documents;
+create policy "candidate writes own document record" on public.candidate_documents for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
 drop policy if exists "published jobs and own jobs readable" on public.jobs;
 create policy "published jobs and own jobs readable" on public.jobs for select to authenticated using (status = 'published' or employer_id = auth.uid());
 drop policy if exists "verified employers create own jobs" on public.jobs;
@@ -158,7 +169,13 @@ with check (candidate_id = auth.uid() and exists (
 ));
 drop policy if exists "candidate changes own application consent" on public.application_consents;
 create policy "candidate changes own application consent" on public.application_consents for update to authenticated
-using (candidate_id = auth.uid()) with check (candidate_id = auth.uid());
+using (candidate_id = auth.uid()) with check (candidate_id = auth.uid() and exists (select 1 from public.applications a where a.id = application_id and a.candidate_id = auth.uid()));
+
+-- Restrict writable application fields: the candidate identity and job cannot be reassigned by a client.
+revoke update on public.applications from authenticated;
+grant update (status) on public.applications to authenticated;
+revoke update on public.application_consents from authenticated;
+grant update (share_phone, share_cv, updated_at) on public.application_consents to authenticated;
 
 -- Private buckets: candidate photos and CVs are never publicly readable.
 insert into storage.buckets (id, name, public) values ('candidate-photos','candidate-photos',false)
