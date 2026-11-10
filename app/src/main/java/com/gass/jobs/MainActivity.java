@@ -203,9 +203,47 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        if (getSharedPreferences("tun_jobs", MODE_PRIVATE).getBoolean("welcome_done", false)) showHome();
-        else showWelcome();
-        if (!SecureSessionStore.read(this).isEmpty()) loadRemoteCandidateProfile();
+        String accessToken = SecureSessionStore.read(this);
+        String refreshToken = SecureSessionStore.readRefreshToken(this);
+        if (accessToken.isEmpty() || refreshToken.isEmpty()) {
+            SecureSessionStore.clear(this);
+            showWelcome();
+        } else {
+            restoreSessionOnLaunch(refreshToken);
+        }
+    }
+
+    private void restoreSessionOnLaunch(String refreshToken) {
+        base("TUN-JOBS", "Restauration sécurisée de votre session…", -1, true);
+        content.addView(text("Veuillez patienter pendant la vérification de votre compte.", 15, muted, false));
+        authExecutor.execute(() -> {
+            SupabaseAuth.Result result = SupabaseAuth.refresh(refreshToken);
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                if (result.ok && !result.accessToken.isEmpty() && !result.refreshToken.isEmpty()) {
+                    try {
+                        SecureSessionStore.save(this, result.accessToken, result.refreshToken);
+                        android.content.SharedPreferences.Editor account =
+                                getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit();
+                        if (!result.userId.isEmpty()) account.putString("user_id", result.userId);
+                        account.apply();
+                        showHome();
+                        loadRemoteCandidateProfile();
+                    } catch (Exception e) {
+                        SecureSessionStore.clear(this);
+                        showWelcome();
+                    }
+                } else if (result.message != null && result.message.startsWith("Connexion impossible :")) {
+                    // Keep the encrypted session during a temporary network outage.
+                    showHome();
+                } else {
+                    SecureSessionStore.clear(this);
+                    getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit().clear().apply();
+                    showWelcome();
+                    Toast.makeText(this, "Votre session a expiré. Connectez-vous à nouveau.", Toast.LENGTH_LONG).show();
+                }
+            });
+        });
     }
 
     private void prepareScreen(boolean rootScreen, Runnable action) {
@@ -381,7 +419,6 @@ public class MainActivity extends Activity {
     }
 
     private void openAccountFromWelcome(boolean create) {
-        getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
         preferSignupOnAccount = create;
         showAccount();
     }
@@ -1008,6 +1045,10 @@ public class MainActivity extends Activity {
 
     // ------------------------------------------------------------------ screens
     private void showHome() {
+        if (SecureSessionStore.read(this).isEmpty()) {
+            showWelcome();
+            return;
+        }
         prepareScreen(true, this::showHome);
         base(null, null, TAB_HOME, false);
 
@@ -1302,8 +1343,9 @@ public class MainActivity extends Activity {
             content.addView(button("Se déconnecter", false, () -> {
                 account.edit().clear().apply();
                 SecureSessionStore.clear(this);
+                screenHistory.clear();
                 Toast.makeText(this, "Déconnecté de TUN-JOBS.", Toast.LENGTH_SHORT).show();
-                showAccount();
+                showWelcome();
             }));
             return;
         }
@@ -1400,7 +1442,7 @@ public class MainActivity extends Activity {
                 }
                 if (!result.accessToken.isEmpty()) {
                     try {
-                        SecureSessionStore.save(this, result.accessToken);
+                        SecureSessionStore.save(this, result.accessToken, result.refreshToken);
                         getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit()
                                 .putString("user_id", result.userId)
                                 .putString("email", email).apply();
@@ -1415,8 +1457,14 @@ public class MainActivity extends Activity {
                 }
                 new AlertDialog.Builder(this).setTitle(create ? "Inscription" : "Connexion")
                         .setMessage(result.message).setPositiveButton("Continuer", (d, w) -> {
-                            if (!result.accessToken.isEmpty()) loadRemoteCandidateProfile();
-                            showAccount();
+                            if (!result.accessToken.isEmpty()) {
+                                getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
+                                showHome();
+                                loadRemoteCandidateProfile();
+                            } else {
+                                preferSignupOnAccount = false;
+                                showAccount();
+                            }
                         }).show();
             });
         });
@@ -1694,32 +1742,36 @@ public class MainActivity extends Activity {
         base("Bienvenue sur TUN-JOBS", "L'emploi et le recrutement, partout en Tunisie.", -1, true);
         content.addView(button("Changer la langue", false, () -> selectLanguage(this::showWelcome)),
                 new LinearLayout.LayoutParams(-1, dp(48)));
-        space(content, 18);
-        content.addView(text("Votre prochain emploi peut commencer ici.", 27, ink, true));
-        space(content, 12);
-        content.addView(text("Trouvez des opportunités près de chez vous, consultez les sources officielles et préparez votre profil candidat. Les employeurs peuvent aussi préparer leurs offres.", 16, muted, false));
-        space(content, 20);
-        content.addView(button("Se connecter", true, () -> openAccountFromWelcome(false)),
-                new LinearLayout.LayoutParams(-1, dp(56)));
-        space(content, 8);
-        content.addView(button("Créer un compte", false, () -> openAccountFromWelcome(true)),
-                new LinearLayout.LayoutParams(-1, dp(56)));
-        space(content, 18);
-        content.addView(text("Ou découvrir TUN-JOBS sans compte", 13, muted, true));
-        space(content, 12);
-        content.addView(button("Je cherche un emploi", false, () -> {
-            getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
-            employerMode = false;
-            showHome();
-        }), new LinearLayout.LayoutParams(-1, dp(60)));
-        space(content, 12);
-        content.addView(button("Je propose un emploi", false, () -> {
-            getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
-            employerMode = true;
-            showHome();
-        }), new LinearLayout.LayoutParams(-1, dp(60)));
         space(content, 22);
-        content.addView(text("TUN-JOBS — Une plateforme tunisienne pour rapprocher candidats et employeurs.", 13, muted, false));
+
+        LinearLayout brand = column();
+        brand.setGravity(Gravity.CENTER_HORIZONTAL);
+        brand.setPadding(dp(20), dp(24), dp(20), dp(24));
+        brand.setBackground(shape(Color.rgb(24, 26, 31), 24));
+        TextView logo = text("TUN-JOBS", 34, Color.WHITE, true);
+        logo.setGravity(Gravity.CENTER);
+        brand.addView(logo, new LinearLayout.LayoutParams(-1, dp(54)));
+        TextView tagline = text("Votre prochain emploi peut commencer ici.", 19, gold, true);
+        tagline.setGravity(Gravity.CENTER);
+        brand.addView(tagline);
+        space(brand, 12);
+        TextView description = text("Trouvez des opportunités près de chez vous, consultez les sources officielles et préparez votre profil candidat. Les employeurs peuvent aussi préparer leurs offres.", 15, muted, false);
+        description.setGravity(Gravity.CENTER);
+        brand.addView(description);
+        content.addView(brand);
+        space(content, 24);
+
+        content.addView(text("Bienvenue !", 24, ink, true));
+        space(content, 6);
+        content.addView(text("Connectez-vous ou créez un compte pour accéder à TUN-JOBS et retrouver votre profil sur vos appareils.", 14, muted, false));
+        space(content, 18);
+        content.addView(button("Se connecter", true, () -> openAccountFromWelcome(false)),
+                new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 10);
+        content.addView(button("Créer un compte", false, () -> openAccountFromWelcome(true)),
+                new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 18);
+        content.addView(text("Connexion sécurisée • Profil synchronisé • Vos données restent protégées", 12, muted, false));
     }
 
     private void showProfile() {
