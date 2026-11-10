@@ -1397,14 +1397,15 @@ public class MainActivity extends Activity {
             } catch (Exception uploadError) {
                 result = new SupabaseProfile.Result(false, "Le profil n'a pas pu être synchronisé : " + uploadError.getMessage());
             }
+            final SupabaseProfile.Result finalResult = result;
             runOnUiThread(() -> {
                 if (isFinishing()) return;
                 getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit()
-                        .putString("sync_status", result.ok ? "online" : "pending").apply();
+                        .putString("sync_status", finalResult.ok ? "online" : "pending").apply();
                 if (profileVisible) showProfile();
                 new AlertDialog.Builder(this)
-                        .setTitle(result.ok ? "Profil synchronisé" : "Synchronisation impossible")
-                        .setMessage(result.message)
+                        .setTitle(finalResult.ok ? "Profil synchronisé" : "Synchronisation impossible")
+                        .setMessage(finalResult.message)
                         .setPositiveButton("OK", null).show();
             });
         });
