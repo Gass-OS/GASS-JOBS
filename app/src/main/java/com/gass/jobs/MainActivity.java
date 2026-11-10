@@ -1383,9 +1383,20 @@ public class MainActivity extends Activity {
             return;
         }
         Toast.makeText(this, "Synchronisation du profil…", Toast.LENGTH_SHORT).show();
+        final String photoFileName = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).getString("photo_file", "");
+        final String photoOwnerId = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).getString("photo_owner_id", "");
         authExecutor.execute(() -> {
-            SupabaseProfile.Result result = SupabaseProfile.upsert(
-                    userId, token, fullName, phone, email, city, profession, education, skills, availability);
+            SupabaseProfile.Result result;
+            try {
+                String photoPath = "";
+                if (!photoFileName.isEmpty() && userId.equals(photoOwnerId)) {
+                    File photoFile = new File(getFilesDir(), photoFileName);
+                    if (photoFile.isFile() && photoFile.length() > 0) photoPath = SupabaseProfile.uploadPhoto(userId, token, photoFile);
+                }
+                result = SupabaseProfile.upsert(userId, token, fullName, phone, email, city, profession, education, skills, availability, photoPath);
+            } catch (Exception uploadError) {
+                result = new SupabaseProfile.Result(false, "Le profil n'a pas pu être synchronisé : " + uploadError.getMessage());
+            }
             runOnUiThread(() -> {
                 if (isFinishing()) return;
                 getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit()
@@ -1407,6 +1418,12 @@ public class MainActivity extends Activity {
             try {
                 SupabaseProfile.ProfileData remote = SupabaseProfile.fetch(userId, token);
                 if (remote == null) return;
+                String downloadedPhoto = "";
+                if (!remote.photoPath.isEmpty()) {
+                    File photoFile = new File(getFilesDir(), "profile-photo");
+                    if (SupabaseProfile.downloadPhoto(remote.photoUrl, remote.photoPath, token, photoFile)) downloadedPhoto = "profile-photo";
+                }
+                final String photoFileName = downloadedPhoto;
                 runOnUiThread(() -> {
                     if (isFinishing()) return;
                     android.content.SharedPreferences.Editor e = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
@@ -1415,11 +1432,14 @@ public class MainActivity extends Activity {
                             .putString("education", remote.education).putString("skills", remote.skills)
                             .putString("availability", remote.availability)
                             .putBoolean("profile_saved", true).putString("sync_status", "online")
-                            .putLong("profile_updated_at", System.currentTimeMillis()).apply();
+                            .putLong("profile_updated_at", System.currentTimeMillis());
+                    if (!photoFileName.isEmpty()) e.putString("photo_file", photoFileName).putString("photo_owner_id", userId)
+                            .putString("photo_path", remote.photoPath).remove("photo_uri");
+                    e.apply();
                     if (profileVisible) showProfile();
                 });
             } catch (Exception ignored) {
-                // Keep the last local copy intact when offline or when the session needs re-authentication.
+                // Preserve the last local copy when offline or when the session needs re-authentication.
             }
         });
     }
@@ -1721,7 +1741,10 @@ public class MainActivity extends Activity {
             return;
         }
         android.content.SharedPreferences.Editor edit = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
-        if (requestCode == PICK_PROFILE_PHOTO) edit.putString("photo_file", copied).remove("photo_uri");
+        if (requestCode == PICK_PROFILE_PHOTO) {
+            String userId = getSharedPreferences("tun_jobs_account", MODE_PRIVATE).getString("user_id", "");
+            edit.putString("photo_file", copied).putString("photo_owner_id", userId).remove("photo_uri");
+        }
         if (requestCode == PICK_PROFILE_CV) edit.putString("cv_file", copied).remove("cv_uri");
         if (!edit.commit()) {
             Toast.makeText(this, "Le fichier est copié, mais l'enregistrement du profil a échoué.", Toast.LENGTH_LONG).show();
@@ -1910,7 +1933,7 @@ public class MainActivity extends Activity {
         }), new LinearLayout.LayoutParams(-1, dp(60)));
         space(content, 8);
         content.addView(text("État du profil : " + ("online".equals(p.getString("sync_status", "local")) ? "synchronisé en ligne" : "enregistré localement, synchronisation en attente").toUpperCase(Locale.ROOT)
-                + ". La photo et le CV restent privés sur cet appareil et ne sont pas envoyés à Supabase.", 13, muted, false));
+                + ". La photo est synchronisée dans le stockage des portraits. Le CV reste privé sur cet appareil dans cette version.", 13, muted, false));
 
         space(content, 22);
         content.addView(text("Mes offres sauvegardées", 20, ink, true));
