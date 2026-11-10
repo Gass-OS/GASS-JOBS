@@ -1165,6 +1165,28 @@ public class MainActivity extends Activity {
         content.addView(text("Après inscription, vérifiez votre boîte e-mail si la confirmation est demandée. N'utilisez pas le même mot de passe que vos autres services.", 12, muted, false));
     }
 
+    private void syncCandidateProfile(String fullName, String phone, String city, String profession,
+                                      String education, String skills, String availability) {
+        String token = SecureSessionStore.read(this);
+        String userId = getSharedPreferences("tun_jobs_account", MODE_PRIVATE).getString("user_id", "");
+        if (token.isEmpty() || userId.isEmpty()) {
+            Toast.makeText(this, "Profil local enregistré. Connectez-vous pour activer la synchronisation.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this, "Synchronisation du profil…", Toast.LENGTH_SHORT).show();
+        authExecutor.execute(() -> {
+            SupabaseProfile.Result result = SupabaseProfile.upsert(
+                    userId, token, fullName, phone, city, profession, education, skills, availability);
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                new AlertDialog.Builder(this)
+                        .setTitle(result.ok ? "Profil synchronisé" : "Synchronisation impossible")
+                        .setMessage(result.message)
+                        .setPositiveButton("OK", null).show();
+            });
+        });
+    }
+
     private void submitAuth(EditText emailField, EditText passwordField, boolean create) {
         String email = emailField.getText().toString().trim();
         String password = passwordField.getText().toString();
@@ -1580,12 +1602,22 @@ public class MainActivity extends Activity {
             e.putBoolean("profile_saved", true);
             e.putLong("profile_updated_at", System.currentTimeMillis());
             boolean stored = e.commit();
-            Toast.makeText(this, stored
-                    ? "Profil et informations enregistrés sur cet appareil."
-                    : "Erreur : le profil n'a pas pu être enregistré.", Toast.LENGTH_LONG).show();
+            if (!stored) {
+                Toast.makeText(this, "Erreur : le profil n'a pas pu être enregistré.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            Toast.makeText(this, "Profil enregistré sur ce téléphone.", Toast.LENGTH_SHORT).show();
+            syncCandidateProfile(
+                    fields[0].getText().toString().trim(),
+                    fields[1].getText().toString().trim(),
+                    fields[3].getText().toString().trim(),
+                    fields[4].getText().toString().trim(),
+                    fields[5].getText().toString().trim(),
+                    fields[6].getText().toString().trim(),
+                    fields[7].getText().toString().trim());
         }), new LinearLayout.LayoutParams(-1, dp(60)));
         space(content, 8);
-        content.addView(text("Enregistrement local : vos informations sont conservées dans l'application et votre photo / CV sont copiés dans son espace privé. Ils restent disponibles après fermeture et redémarrage de l'application. Rien n'est envoyé ni publié.", 13, muted, false));
+        content.addView(text("Le profil est conservé sur ce téléphone. Si vous êtes connecté, vos informations professionnelles et votre téléphone sont aussi synchronisés avec votre compte Supabase. La photo et le CV restent privés sur cet appareil dans cette étape.", 13, muted, false));
 
         space(content, 22);
         content.addView(text("Mes offres sauvegardées", 20, ink, true));
