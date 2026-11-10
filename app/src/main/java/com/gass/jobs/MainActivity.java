@@ -42,6 +42,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
     private final int ink = Color.rgb(245, 246, 250);
@@ -80,6 +82,7 @@ public class MainActivity extends Activity {
     private LinearLayout actionBar;
     private TextView likeStamp, nopeStamp;
     private boolean animating = false;
+    private final ExecutorService authExecutor = Executors.newSingleThreadExecutor();
 
     private static class Job {
         final String title, company, location, governorate, sector, contract, description;
@@ -1124,6 +1127,73 @@ public class MainActivity extends Activity {
         Toast.makeText(this, added ? "Profil ajouté à la présélection." : "Profil déjà présélectionné.", Toast.LENGTH_SHORT).show();
     }
 
+    private void showAccount() {
+        prepareScreen(false, this::showAccount);
+        android.content.SharedPreferences account = getSharedPreferences("tun_jobs_account", MODE_PRIVATE);
+        String savedEmail = account.getString("email", "");
+        String token = account.getString("access_token", "");
+        base("Compte TUN-JOBS", "Connexion sécurisée avec votre compte Supabase.");
+        if (!token.isEmpty()) {
+            content.addView(chip("✓ CONNECTÉ", true));
+            space(content, 10);
+            content.addView(text("Adresse : " + savedEmail, 15, ink, true));
+            space(content, 8);
+            content.addView(text("Votre session est enregistrée sur cet appareil. La synchronisation des profils, offres et candidatures sera activée dans les prochaines étapes.", 13, muted, false));
+            space(content, 16);
+            content.addView(button("Se déconnecter", false, () -> {
+                account.edit().clear().apply();
+                Toast.makeText(this, "Déconnecté de TUN-JOBS.", Toast.LENGTH_SHORT).show();
+                showAccount();
+            }));
+            return;
+        }
+        EditText email = profileField("Adresse e-mail", savedEmail);
+        email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        EditText password = profileField("Mot de passe (6 caractères minimum)", "");
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        content.addView(text("E-mail", 13, muted, true));
+        content.addView(email, new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 10);
+        content.addView(text("Mot de passe", 13, muted, true));
+        content.addView(password, new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 12);
+        content.addView(button("Se connecter", true, () -> submitAuth(email, password, false)), new LinearLayout.LayoutParams(-1, dp(54)));
+        space(content, 8);
+        content.addView(button("Créer un compte", false, () -> submitAuth(email, password, true)), new LinearLayout.LayoutParams(-1, dp(54)));
+        space(content, 12);
+        content.addView(text("Après inscription, vérifiez votre boîte e-mail si la confirmation est demandée. N'utilisez pas le même mot de passe que vos autres services.", 12, muted, false));
+    }
+
+    private void submitAuth(EditText emailField, EditText passwordField, boolean create) {
+        String email = emailField.getText().toString().trim();
+        String password = passwordField.getText().toString();
+        if (email.isEmpty() || !email.contains("@") || password.length() < 6) {
+            Toast.makeText(this, "Saisissez un e-mail valide et un mot de passe d'au moins 6 caractères.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this, create ? "Création du compte…" : "Connexion…", Toast.LENGTH_SHORT).show();
+        authExecutor.execute(() -> {
+            SupabaseAuth.Result result = create ? SupabaseAuth.signUp(email, password) : SupabaseAuth.signIn(email, password);
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                if (!result.ok) {
+                    new AlertDialog.Builder(this).setTitle("Compte TUN-JOBS").setMessage(result.message).setPositiveButton("OK", null).show();
+                    return;
+                }
+                if (!result.accessToken.isEmpty()) {
+                    getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit()
+                            .putString("access_token", result.accessToken)
+                            .putString("user_id", result.userId)
+                            .putString("email", email).apply();
+                } else {
+                    getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit().putString("email", email).apply();
+                }
+                new AlertDialog.Builder(this).setTitle(create ? "Inscription" : "Connexion")
+                        .setMessage(result.message).setPositiveButton("Continuer", (d, w) -> showAccount()).show();
+            });
+        });
+    }
+
     private void showMenu() {
         prepareScreen(false, this::showMenu);
         base("Menu TUN-JOBS", "Accès rapide à votre espace et aux réglages.");
@@ -1137,6 +1207,12 @@ public class MainActivity extends Activity {
         banner.addView(text("GASS-OS  •  BY AYMEN GHARSALLI", 13, Color.WHITE, false));
         content.addView(banner);
         space(content, 18);
+        android.content.SharedPreferences account = getSharedPreferences("tun_jobs_account", MODE_PRIVATE);
+        String signedEmail = account.getString("email", "");
+        content.addView(text(signedEmail.isEmpty() ? "Aucun compte connecté" : "Connecté : " + signedEmail, 13, muted, false));
+        space(content, 8);
+        content.addView(button(signedEmail.isEmpty() ? "☁  Connexion / Créer un compte" : "☁  Gérer mon compte en ligne", true, this::showAccount), new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 8);
         content.addView(button("⌂   Emplois", false, this::showHome), new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 8);
         content.addView(button("♙   Mon profil", false, this::showProfile), new LinearLayout.LayoutParams(-1, dp(58)));
@@ -1160,7 +1236,7 @@ public class MainActivity extends Activity {
         space(content, 16);
         content.addView(text("Confidentialité", 18, ink, true));
         space(content, 6);
-        content.addView(text("Votre profil, votre photo, votre CV et les brouillons d'offres sont enregistrés localement. Cette version ne possède pas encore de compte en ligne ni de synchronisation serveur.", 14, muted, false));
+        content.addView(text("Votre profil, votre photo, votre CV et les brouillons restent enregistrés localement pour le moment. La connexion Supabase par e-mail est disponible ; la synchronisation et la publication en ligne sont en cours d’intégration.", 14, muted, false));
         space(content, 16);
         content.addView(button("Réafficher l'écran de bienvenue au prochain lancement", false, () -> {
             prefs.edit().putBoolean("welcome_done", false).apply();
