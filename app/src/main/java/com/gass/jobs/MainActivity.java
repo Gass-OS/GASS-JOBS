@@ -13,6 +13,8 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.TextUtils;
@@ -21,6 +23,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -28,10 +31,13 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -46,12 +52,18 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
-    private final int ink = Color.rgb(245, 246, 250);
-    private final int muted = Color.rgb(171, 178, 190);
-    private final int green = Color.rgb(245, 178, 35);
-    private final int canvas = Color.rgb(10, 11, 14);
-    private final int panel = Color.rgb(25, 27, 33);
-    private final int gold = Color.rgb(255, 190, 45);
+    private int ink = Color.rgb(245, 246, 250);
+    private int muted = Color.rgb(171, 178, 190);
+    private int green = Color.rgb(245, 178, 35);
+    private int canvas = Color.rgb(10, 11, 14);
+    private int panel = Color.rgb(25, 27, 33);
+    private int gold = Color.rgb(255, 190, 45);
+    private TextView headerClock;
+    private TextView headerDate;
+    private final Handler clockHandler = new Handler(Looper.getMainLooper());
+    private final Runnable clockTicker = new Runnable() {
+        @Override public void run() { updateHeaderClock(); clockHandler.postDelayed(this, 1000L); }
+    };
     private LinearLayout root;
     private LinearLayout content;
     private boolean employerMode = false;
@@ -203,6 +215,9 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        applyAppTheme(); applySavedBrightness();
+        boolean forceWelcome=getSharedPreferences("tun_jobs",MODE_PRIVATE).getBoolean("force_welcome_once",false);
+        if(forceWelcome){getSharedPreferences("tun_jobs",MODE_PRIVATE).edit().putBoolean("force_welcome_once",false).apply();showWelcome();return;}
         String accessToken = SecureSessionStore.read(this);
         String refreshToken = SecureSessionStore.readRefreshToken(this);
         if (accessToken.isEmpty() || refreshToken.isEmpty()) {
@@ -252,20 +267,22 @@ public class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
-        if (!screenHistory.isEmpty()) {
-            Runnable previous = screenHistory.remove(screenHistory.size() - 1);
-            restoringScreen = true;
-            previous.run();
-            restoringScreen = false;
-            return;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("Quitter TUN-JOBS ?")
-                .setMessage("Voulez-vous vraiment fermer l'application ?")
-                .setNegativeButton("Annuler", (dialog, which) -> dialog.dismiss())
-                .setPositiveButton("Quitter", (dialog, which) -> finish())
-                .show();
+        if (!screenHistory.isEmpty()) { Runnable previous=screenHistory.remove(screenHistory.size()-1); restoringScreen=true; previous.run(); restoringScreen=false; return; }
+        showExitConfirmation();
     }
+    @Override protected void onPause(){clockHandler.removeCallbacks(clockTicker);super.onPause();}
+    @Override protected void onResume(){super.onResume();if(headerClock!=null){updateHeaderClock();clockHandler.removeCallbacks(clockTicker);clockHandler.post(clockTicker);}}
+    @Override protected void onDestroy(){clockHandler.removeCallbacks(clockTicker);super.onDestroy();}
+    private void showExitConfirmation(){new AlertDialog.Builder(this).setTitle("Quitter TUN-JOBS ?").setMessage("Voulez-vous vraiment fermer l'application ?").setNegativeButton("Annuler",(d,w)->d.dismiss()).setPositiveButton("Quitter",(d,w)->finish()).show();}
+    private void applyAppTheme(){
+        String t=getSharedPreferences("tun_jobs",MODE_PRIVATE).getString("theme","black_gold");
+        if("blue_dark".equals(t)){ink=Color.rgb(239,247,255);muted=Color.rgb(157,184,207);green=Color.rgb(67,196,183);canvas=Color.rgb(6,17,29);panel=Color.rgb(17,39,60);gold=Color.rgb(73,174,255);}
+        else if("amber".equals(t)){ink=Color.rgb(245,246,250);muted=Color.rgb(171,178,190);green=Color.rgb(245,178,35);canvas=Color.rgb(10,11,14);panel=Color.rgb(25,27,33);gold=Color.rgb(255,190,45);}
+        else{ink=Color.rgb(250,246,232);muted=Color.rgb(185,174,148);green=Color.rgb(210,174,91);canvas=Color.rgb(5,5,6);panel=Color.rgb(23,20,14);gold=Color.rgb(218,176,82);}
+        getWindow().setStatusBarColor(canvas);getWindow().setNavigationBarColor(canvas);
+    }
+    private void applySavedBrightness(){int p=getSharedPreferences("tun_jobs",MODE_PRIVATE).getInt("brightness",70);WindowManager.LayoutParams a=getWindow().getAttributes();a.screenBrightness=0.30f+Math.max(0,Math.min(70,p))/100f;getWindow().setAttributes(a);}
+    private void updateHeaderClock(){if(headerClock==null||headerDate==null)return;String l=getSharedPreferences("tun_jobs",MODE_PRIVATE).getString("language","fr");Locale locale=Locale.forLanguageTag(l+"-TN");Date now=new Date();headerClock.setText(new SimpleDateFormat("HH:mm:ss",locale).format(now));headerDate.setText(new SimpleDateFormat("EEE, d MMM",locale).format(now));}
     // ------------------------------------------------------------------ helpers
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
@@ -279,6 +296,11 @@ public class MainActivity extends Activity {
         if (value == null) return null;
         if ("en".equals(getSharedPreferences("tun_jobs", MODE_PRIVATE).getString("language", "fr"))) {
             switch (value) {
+                case "Thème de l'application": return "App theme"; case "Bleu nuit": return "Dark blue"; case "Ambre": return "Amber"; case "Noir & or": return "Black & gold";
+                case "Luminosité de l'application": return "App brightness"; case "Apparence": return "Appearance"; case "Confidentialité et données": return "Privacy and data";
+                case "Bienvenue et navigation": return "Welcome and navigation"; case "À propos de TUN-JOBS": return "About TUN-JOBS"; case "Liens et communauté": return "Links and community";
+                case "Développé par GASS-OS": return "Developed by GASS-OS"; case "Sources et transparence": return "Sources and transparency";
+                case "Informations sur l'application": return "App information"; case "Choisir un thème": return "Choose a theme";
                 case "Bienvenue sur TUN-JOBS": return "Welcome to TUN-JOBS";
                 case "L'emploi et le recrutement, partout en Tunisie.": return "Jobs and recruitment, across Tunisia.";
                 case "Votre prochain emploi peut commencer ici.": return "Your next job can start here.";
@@ -316,6 +338,7 @@ public class MainActivity extends Activity {
                 case "Aucune offre sauvegardée pour le moment.": return "No saved jobs yet.";
                 case "Paramètres": return "Settings";
                 case "Préférences de TUN-JOBS sur cet appareil.": return "TUN-JOBS preferences on this device.";
+                case "Personnalisez l'apparence et le fonctionnement de TUN-JOBS.": return "Customize the appearance and behavior of TUN-JOBS.";
                 case "Confidentialité": return "Privacy";
                 case "Retour aux emplois": return "Back to jobs";
                 case "Accueil": return "Home";
@@ -341,6 +364,10 @@ public class MainActivity extends Activity {
         }
         if (!isArabic()) return value;
         switch (value) {
+            case "Thème de l'application": return "سمة التطبيق"; case "Bleu nuit": return "أزرق داكن"; case "Ambre": return "كهرماني"; case "Noir & or": return "أسود وذهبي";
+            case "Luminosité de l'application": return "سطوع التطبيق"; case "Apparence": return "المظهر"; case "Confidentialité et données": return "الخصوصية والبيانات";
+            case "Bienvenue et navigation": return "الترحيب والتنقل"; case "À propos de TUN-JOBS": return "حول TUN-JOBS"; case "Liens et communauté": return "الروابط والمجتمع";
+            case "Développé par GASS-OS": return "تطوير GASS-OS"; case "Sources et transparence": return "المصادر والشفافية"; case "Informations sur l'application": return "معلومات التطبيق"; case "Choisir un thème": return "اختر السمة";
             case "Bienvenue sur TUN-JOBS": return "مرحباً بك في TUN-JOBS";
             case "L'emploi et le recrutement, partout en Tunisie.": return "التشغيل والانتداب في كامل تونس";
             case "Votre prochain emploi peut commencer ici.": return "فرصتك المهنية القادمة تبدأ من هنا";
@@ -378,6 +405,7 @@ public class MainActivity extends Activity {
             case "Aucune offre sauvegardée pour le moment.": return "لا توجد عروض محفوظة حالياً";
             case "Paramètres": return "الإعدادات";
             case "Préférences de TUN-JOBS sur cet appareil.": return "إعدادات TUN-JOBS على هذا الجهاز";
+            case "Personnalisez l'apparence et le fonctionnement de TUN-JOBS.": return "خصص مظهر TUN-JOBS وطريقة عمله";
             case "Confidentialité": return "الخصوصية";
             case "Retour aux emplois": return "العودة إلى الوظائف";
             case "Accueil": return "الرئيسية";
@@ -438,8 +466,8 @@ public class MainActivity extends Activity {
     }
 
     private GradientDrawable goldGradient(int radiusDp) {
-        GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[] {Color.rgb(255, 204, 75), Color.rgb(222, 145, 8)});
+        int darker=Color.rgb((int)(Color.red(gold)*0.78f),(int)(Color.green(gold)*0.78f),(int)(Color.blue(gold)*0.78f));
+        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,new int[]{gold,darker});
         d.setCornerRadius(dp(radiusDp));
         return d;
     }
@@ -569,7 +597,7 @@ public class MainActivity extends Activity {
         // top bar: menu - logo - search - notifications
         LinearLayout top = row();
         top.setPadding(dp(8), dp(6), dp(8), dp(6));
-        top.setBackgroundColor(Color.rgb(8, 9, 12));
+        top.setBackgroundColor(canvas);
         TextView menuIcon = topIcon("☰", 26, this::showMenu);
         menuIcon.setContentDescription("Menu");
         top.addView(menuIcon, new LinearLayout.LayoutParams(dp(48), dp(48)));
@@ -579,18 +607,16 @@ public class MainActivity extends Activity {
         TextView brand = text("", 24, Color.WHITE, true);
         brand.setText(brandText);
         brandBox.addView(brand);
-        brandBox.addView(text("Trouvez votre emploi en Tunisie", 12, muted, false));
-        LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(0, -2, 1);
-        brandParams.leftMargin = dp(6);
-        top.addView(brandBox, brandParams);
-        TextView searchIcon = topIcon("🔍", 20, this::showOffers);
+        brandBox.addView(text("Trouvez votre emploi en Tunisie",12,muted,false));LinearLayout.LayoutParams brandParams=new LinearLayout.LayoutParams(0,-2,1);brandParams.leftMargin=dp(6);top.addView(brandBox,brandParams);
+        LinearLayout clockBox=column();clockBox.setGravity(Gravity.CENTER);headerClock=text("--:--:--",13,gold,true);headerClock.setGravity(Gravity.CENTER);clockBox.addView(headerClock);headerDate=text("--",9,muted,false);headerDate.setGravity(Gravity.CENTER);clockBox.addView(headerDate);top.addView(clockBox,new LinearLayout.LayoutParams(dp(72),dp(48)));
+        TextView searchIcon=topIcon("🔍",20,this::showOffers);
         searchIcon.setContentDescription("Rechercher");
         top.addView(searchIcon, new LinearLayout.LayoutParams(dp(44), dp(48)));
         TextView bellIcon = topIcon("🔔", 20, () ->
                 Toast.makeText(this, "Aucune nouvelle notification.", Toast.LENGTH_SHORT).show());
         bellIcon.setContentDescription("Notifications");
         top.addView(bellIcon, new LinearLayout.LayoutParams(dp(44), dp(48)));
-        root.addView(top);
+        root.addView(top);clockHandler.removeCallbacks(clockTicker);updateHeaderClock();clockHandler.post(clockTicker);
 
         if (title != null) {
             LinearLayout head = column();
@@ -620,7 +646,7 @@ public class MainActivity extends Activity {
 
     private View buildNav(int active) {
         LinearLayout nav = row();
-        nav.setBackgroundColor(Color.rgb(12, 13, 17));
+        nav.setBackgroundColor(canvas);
         nav.setPadding(0, dp(4), 0, dp(6));
         String[] icons = {"🏠", "💼", "👤", "🏢", "⚙️"};
         String[] labels = {"Accueil", "Offres", "Profil", "Employeurs", "Plus"};
@@ -1496,7 +1522,7 @@ public class MainActivity extends Activity {
         base("Menu TUN-JOBS", "Accès rapide à votre espace et aux réglages.");
         LinearLayout banner = column();
         banner.setPadding(dp(20), dp(22), dp(20), dp(22));
-        banner.setBackground(shape(Color.rgb(24, 26, 31), 18));
+        banner.setBackground(shape(panel, 18));
         banner.addView(text("TUN-JOBS", 25, Color.WHITE, true));
         space(banner, 6);
         banner.addView(text("EMPLOI • RECRUTEMENT • TUNISIE", 13, gold, true));
@@ -1520,50 +1546,53 @@ public class MainActivity extends Activity {
         space(content, 8);
         content.addView(button("Sites officiels de l'emploi", false, this::showOfficialSources), new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 8);
-        content.addView(button("Bureaux régionaux", false, this::showEmploymentOffices), new LinearLayout.LayoutParams(-1, dp(58)));
+        content.addView(button("Bureaux régionaux",false,this::showEmploymentOffices),new LinearLayout.LayoutParams(-1,dp(58)));
+        space(content,8);content.addView(button("⏻   Quitter TUN-JOBS",false,this::showExitConfirmation),new LinearLayout.LayoutParams(-1,dp(58)));
     }
 
     private void showSettings() {
-        prepareScreen(false, this::showSettings);
-        base("Paramètres", "Préférences de TUN-JOBS sur cet appareil.");
-        android.content.SharedPreferences prefs = getSharedPreferences("tun_jobs", MODE_PRIVATE);
-        content.addView(text("Langue de l'application", 20, ink, true));
-        space(content, 8);
-        content.addView(button("Changer la langue", false, () -> selectLanguage(this::showSettings)),
-                new LinearLayout.LayoutParams(-1, dp(54)));
-        space(content, 16);
-        content.addView(text("Confidentialité", 18, ink, true));
-        space(content, 6);
-        content.addView(text("Votre profil, votre photo, votre CV et les brouillons restent enregistrés localement pour le moment. La connexion Supabase par e-mail est disponible ; la synchronisation et la publication en ligne sont en cours d’intégration.", 14, muted, false));
-        space(content, 16);
-        content.addView(button("Réafficher l'écran de bienvenue au prochain lancement", false, () -> {
-            prefs.edit().putBoolean("welcome_done", false).apply();
-            Toast.makeText(this, "L'écran de bienvenue sera affiché au prochain lancement.", Toast.LENGTH_LONG).show();
-        }), new LinearLayout.LayoutParams(-1, dp(58)));
-        space(content, 10);
-        content.addView(button("Retour aux emplois", true, this::showHome), new LinearLayout.LayoutParams(-1, dp(58)));
+        prepareScreen(false,this::showSettings);base("Paramètres","Personnalisez l'apparence et le fonctionnement de TUN-JOBS.");
+        android.content.SharedPreferences prefs=getSharedPreferences("tun_jobs",MODE_PRIVATE);
+        content.addView(text("Apparence",20,ink,true));space(content,8);content.addView(text("Thème de l'application",14,muted,true));space(content,6);
+        String th=prefs.getString("theme","black_gold"),label="blue_dark".equals(th)?"Bleu nuit":("amber".equals(th)?"Ambre":"Noir & or");
+        content.addView(button("🎨  "+label+"  •  Changer le thème",false,this::selectAppTheme),new LinearLayout.LayoutParams(-1,dp(56)));space(content,16);
+        content.addView(text("Luminosité de l'application",16,ink,true));space(content,4);
+        int saved=prefs.getInt("brightness",70);TextView value=text((30+saved)+" %",13,gold,true);content.addView(value);
+        SeekBar seek=new SeekBar(this);seek.setMax(70);seek.setProgress(saved);seek.setProgressTintList(android.content.res.ColorStateList.valueOf(gold));seek.setThumbTintList(android.content.res.ColorStateList.valueOf(gold));
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){@Override public void onProgressChanged(SeekBar s,int p,boolean user){value.setText((30+p)+" %");prefs.edit().putInt("brightness",p).apply();applySavedBrightness();}@Override public void onStartTrackingTouch(SeekBar s){}@Override public void onStopTrackingTouch(SeekBar s){}});
+        content.addView(seek,new LinearLayout.LayoutParams(-1,dp(42)));space(content,14);
+        content.addView(text("Langue",18,ink,true));space(content,6);content.addView(button("🌐  Changer la langue • Français / English / العربية",false,()->selectLanguage(this::showSettings)),new LinearLayout.LayoutParams(-1,dp(54)));space(content,16);
+        content.addView(text("Confidentialité et données",18,ink,true));space(content,6);
+        content.addView(text("Votre compte et les informations de votre profil sont synchronisés avec Supabase après connexion. La photo de profil peut être synchronisée pour l'affichage public. Votre CV reste privé et n'est pas rendu public par cette application. Ne partagez jamais votre mot de passe.",14,muted,false));space(content,16);
+        content.addView(text("Bienvenue et navigation",18,ink,true));space(content,6);
+        content.addView(button("👋  Réafficher l'écran de bienvenue au prochain lancement",false,()->{prefs.edit().putBoolean("force_welcome_once",true).apply();Toast.makeText(this,"L'écran de bienvenue sera affiché au prochain lancement.",Toast.LENGTH_LONG).show();}),new LinearLayout.LayoutParams(-1,dp(58)));
+        space(content,8);content.addView(button("⏻  Quitter l'application",false,this::showExitConfirmation),new LinearLayout.LayoutParams(-1,dp(56)));space(content,10);
+        content.addView(button("Retour aux emplois",true,this::showHome),new LinearLayout.LayoutParams(-1,dp(58)));
+    }
+    private void selectAppTheme(){
+        String[] labels={"Bleu nuit","Ambre","Noir & or"},values={"blue_dark","amber","black_gold"};String current=getSharedPreferences("tun_jobs",MODE_PRIVATE).getString("theme","black_gold");
+        int selected="blue_dark".equals(current)?0:("amber".equals(current)?1:2);
+        new AlertDialog.Builder(this).setTitle("Choisir un thème").setSingleChoiceItems(labels,selected,(d,w)->{getSharedPreferences("tun_jobs",MODE_PRIVATE).edit().putString("theme",values[w]).apply();d.dismiss();applyAppTheme();showSettings();}).setNegativeButton("Annuler",null).show();
     }
 
-    private void showAboutMe() {
-        prepareScreen(false, this::showAboutMe);
-        base("À propos", "Qui sommes-nous ?");
-        LinearLayout banner = column();
-        banner.setPadding(dp(20), dp(22), dp(20), dp(22));
-        banner.setBackground(shape(Color.rgb(22, 35, 52), 18));
-        banner.addView(text("TUN-JOBS", 28, Color.WHITE, true));
-        space(banner, 8);
-        banner.addView(text("Une plateforme tunisienne pour rapprocher les candidats et les employeurs.", 16, Color.WHITE, false));
-        content.addView(banner);
-        space(content, 18);
-        content.addView(text("Créé par GASS-OS", 20, green, true));
-        space(content, 6);
-        content.addView(text("Conçu par Aymen Gharsalli. Notre objectif est de faciliter l'accès aux opportunités d'emploi à Kasserine et dans les 24 gouvernorats de Tunisie.", 15, muted, false));
-        space(content, 16);
-        content.addView(text("Version de démonstration", 17, ink, true));
-        space(content, 6);
-        content.addView(text("Les annonces visibles actuellement sont des exemples fictifs. Les portails publics s'ouvrent directement sur leurs sites officiels. Les comptes, candidatures et publications en ligne nécessitent encore un service sécurisé.", 14, muted, false));
-        space(content, 18);
-        content.addView(button("Retour", true, this::showMenu), new LinearLayout.LayoutParams(-1, dp(58)));
+    private void showAboutMe(){
+        prepareScreen(false,this::showAboutMe);base("À propos de TUN-JOBS","Une plateforme numérique pour l'emploi et le recrutement en Tunisie.");
+        LinearLayout banner=column();banner.setGravity(Gravity.CENTER_HORIZONTAL);banner.setPadding(dp(20),dp(24),dp(20),dp(24));banner.setBackground(shape(panel,22));
+        TextView mark=text("🇹🇳  TUN-JOBS",30,ink,true);mark.setGravity(Gravity.CENTER);banner.addView(mark,new LinearLayout.LayoutParams(-1,dp(56)));
+        TextView tagline=text("EMPLOI • RECRUTEMENT • OPPORTUNITÉS",12,gold,true);tagline.setGravity(Gravity.CENTER);banner.addView(tagline);space(banner,10);
+        TextView desc=text("TUN-JOBS aide les candidats à découvrir des opportunités, préparer leur profil et consulter les portails officiels. Les employeurs peuvent explorer les outils de recrutement disponibles dans l'application.",14,muted,false);desc.setGravity(Gravity.CENTER);banner.addView(desc);content.addView(banner);space(content,16);
+        content.addView(text("Développé par GASS-OS",19,gold,true));space(content,5);content.addView(text("Conception et développement : Aymen Gharsalli. Projet indépendant de GASS-OS, avec une ambition nationale pour les 24 gouvernorats de Tunisie.",14,muted,false));space(content,14);
+        String version="Version 0.2.0";try{version="Version "+getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}
+        content.addView(text("Informations sur l'application",17,ink,true));space(content,5);content.addView(text(version+" • Android • Français / English / العربية",13,muted,false));space(content,10);
+        content.addView(text("Sources et transparence",17,ink,true));space(content,5);
+        content.addView(text("Les offres identifiées comme officielles renvoient vers leurs pages sources, notamment ANETI. Les conditions et la disponibilité doivent toujours être vérifiées sur le site d'origine. Certains profils et exemples affichés dans les espaces de démonstration sont fictifs et ne représentent pas de vraies personnes.",14,muted,false));space(content,8);
+        content.addView(text("Les comptes et profils peuvent être synchronisés via Supabase. Les photos de profil sont destinées à l'affichage public. Les CV restent privés ; ne considérez pas un CV comme transmis à un employeur tant qu'une fonction de partage sécurisée n'est pas explicitement proposée.",14,muted,false));space(content,16);
+        content.addView(text("Liens et communauté",18,ink,true));space(content,8);
+        infoCard("💻  GASS-OS sur GitHub","Code source, mises à jour et projets open-source.","Ouvrir GitHub",()->openExternal("https://github.com/Gass-OS"));
+        infoCard("▶  GASS-OS sur YouTube","Actualités, démonstrations et présentations des projets.","Ouvrir YouTube",()->openExternal("https://youtube.com/@luxtrust-os"));
+        infoCard("f  GASS-OS sur Facebook","Suivre les nouveautés et les annonces du projet.","Ouvrir Facebook",()->openExternal("https://www.facebook.com/BMENLUXIII"));
+        infoCard("✉  Contacter le développeur","Pour les retours, les suggestions et les signalements.","Envoyer un e-mail",()->openExternal("mailto:gharsalli1994@gmail.com?subject=TUN-JOBS%20-%20Support"));
+        space(content,8);content.addView(button("Retour",true,this::showMenu),new LinearLayout.LayoutParams(-1,dp(58)));
     }
 
     private void showOfficialSources() {
@@ -1795,7 +1824,10 @@ public class MainActivity extends Activity {
         content.addView(button("Créer un compte", false, () -> openAccountFromWelcome(true)),
                 new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 18);
-        content.addView(text("Connexion sécurisée • Profil synchronisé • Vos données restent protégées", 12, muted, false));
+        content.addView(text("Connexion sécurisée • Profil synchronisé • Vos données restent protégées",12,muted,false));space(content,14);
+        content.addView(text("🔎  Sources officielles   •   👤  Profil candidat   •   🌍  24 gouvernorats",13,gold,true));space(content,8);
+        content.addView(text("Conçu par GASS-OS pour faciliter l'accès aux opportunités professionnelles en Tunisie. L'application propose des liens vers les annonces officielles et des outils de préparation de profil. Vérifiez toujours les détails auprès de l'organisme qui publie l'offre.",13,muted,false));
+        if(!SecureSessionStore.read(this).isEmpty()){space(content,12);content.addView(button("Continuer vers mon espace",true,this::showHome),new LinearLayout.LayoutParams(-1,dp(56)));}
     }
 
     private void showProfile() {
