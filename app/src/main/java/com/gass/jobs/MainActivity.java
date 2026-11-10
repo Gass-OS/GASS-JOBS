@@ -1,11 +1,16 @@
 package com.gass.jobs;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.Spannable;
@@ -31,10 +36,14 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
     private final int ink = Color.rgb(245, 246, 250);
@@ -60,6 +69,10 @@ public class MainActivity extends Activity {
     private static final int PICK_PROFILE_CV = 7102;
     private ImageView profilePhotoView;
     private TextView profileCvLabel;
+    private Location userLocation;
+    private boolean sortByDistance = false;
+    private TextView locationStatus;
+    private static final int REQUEST_LOCATION_PERMISSION = 7201;
     private int swipeIndex = 0;
     private int candidateSwipeIndex = 0;
     private final ArrayList<Job> visibleJobs = new ArrayList<Job>();
@@ -69,6 +82,9 @@ public class MainActivity extends Activity {
     private LinearLayout actionBar;
     private TextView likeStamp, nopeStamp;
     private boolean animating = false;
+    private boolean profileVisible = false;
+    private boolean preferSignupOnAccount = false;
+    private final ExecutorService authExecutor = Executors.newSingleThreadExecutor();
 
     private static class Job {
         final String title, company, location, governorate, sector, contract, description;
@@ -187,8 +203,47 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        if (getSharedPreferences("tun_jobs", MODE_PRIVATE).getBoolean("welcome_done", false)) showHome();
-        else showWelcome();
+        String accessToken = SecureSessionStore.read(this);
+        String refreshToken = SecureSessionStore.readRefreshToken(this);
+        if (accessToken.isEmpty() || refreshToken.isEmpty()) {
+            SecureSessionStore.clear(this);
+            showWelcome();
+        } else {
+            restoreSessionOnLaunch(refreshToken);
+        }
+    }
+
+    private void restoreSessionOnLaunch(String refreshToken) {
+        base("TUN-JOBS", "Restauration sécurisée de votre session…", -1, true);
+        content.addView(text("Veuillez patienter pendant la vérification de votre compte.", 15, muted, false));
+        authExecutor.execute(() -> {
+            SupabaseAuth.Result result = SupabaseAuth.refresh(refreshToken);
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                if (result.ok && !result.accessToken.isEmpty() && !result.refreshToken.isEmpty()) {
+                    try {
+                        SecureSessionStore.save(this, result.accessToken, result.refreshToken);
+                        android.content.SharedPreferences.Editor account =
+                                getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit();
+                        if (!result.userId.isEmpty()) account.putString("user_id", result.userId);
+                        account.apply();
+                        showHome();
+                        loadRemoteCandidateProfile();
+                    } catch (Exception e) {
+                        SecureSessionStore.clear(this);
+                        showWelcome();
+                    }
+                } else if (result.message != null && result.message.startsWith("Connexion impossible :")) {
+                    // Keep the encrypted session during a temporary network outage.
+                    showHome();
+                } else {
+                    SecureSessionStore.clear(this);
+                    getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit().clear().apply();
+                    showWelcome();
+                    Toast.makeText(this, "Votre session a expiré. Connectez-vous à nouveau.", Toast.LENGTH_LONG).show();
+                }
+            });
+        });
     }
 
     private void prepareScreen(boolean rootScreen, Runnable action) {
@@ -214,6 +269,158 @@ public class MainActivity extends Activity {
     // ------------------------------------------------------------------ helpers
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private boolean isArabic() {
+        return "ar".equals(getSharedPreferences("tun_jobs", MODE_PRIVATE).getString("language", "fr"));
+    }
+
+    private String tr(String value) {
+        if (value == null) return null;
+        if ("en".equals(getSharedPreferences("tun_jobs", MODE_PRIVATE).getString("language", "fr"))) {
+            switch (value) {
+                case "Bienvenue sur TUN-JOBS": return "Welcome to TUN-JOBS";
+                case "L'emploi et le recrutement, partout en Tunisie.": return "Jobs and recruitment, across Tunisia.";
+                case "Votre prochain emploi peut commencer ici.": return "Your next job can start here.";
+                case "Trouvez des opportunités près de chez vous, consultez les sources officielles et préparez votre profil candidat. Les employeurs peuvent aussi préparer leurs offres.": return "Find opportunities nearby, browse official sources and build your candidate profile. Employers can prepare job offers too.";
+                case "Je cherche un emploi": return "I'm looking for a job";
+                case "Je propose un emploi": return "I'm offering a job";
+                case "Se connecter": return "Log in";
+                case "Créer un compte": return "Sign up";
+                case "Ou découvrir TUN-JOBS sans compte": return "Or explore TUN-JOBS without an account";
+                case "Langue de l'application": return "App language";
+                case "Changer la langue": return "Change language";
+                case "Votre carte candidat": return "Your candidate profile";
+                case "Un profil clair pour présenter votre parcours professionnel.": return "A clear profile to present your professional background.";
+                case "Aperçu de votre profil": return "Profile preview";
+                case "Modifier mes informations": return "Edit my information";
+                case "Nom et prénom": return "Full name";
+                case "Téléphone": return "Phone";
+                case "Adresse e-mail": return "Email address";
+                case "Ville / gouvernorat": return "City / governorate";
+                case "Expérience et métier recherché": return "Experience and desired job";
+                case "Formation / diplôme": return "Education / qualification";
+                case "Compétences": return "Skills";
+                case "Disponibilité": return "Availability";
+                case "Nom et prénom *": return "Full name *";
+                case "Téléphone *": return "Phone *";
+                case "E-mail": return "Email";
+                case "Mot de passe": return "Password";
+                case "Mot de passe (6 caractères minimum)": return "Password (at least 6 characters)";
+                case "Ajouter / modifier ma photo": return "Add / change my photo";
+                case "Joindre mon CV (PDF ou document)": return "Attach my CV";
+                case "Aucun CV sélectionné": return "No CV selected";
+                case "CV enregistré sur cet appareil": return "CV saved on this device";
+                case "Enregistrer mon profil sur ce téléphone": return "Save my profile on this phone";
+                case "Mes offres sauvegardées": return "My saved jobs";
+                case "Aucune offre sauvegardée pour le moment.": return "No saved jobs yet.";
+                case "Paramètres": return "Settings";
+                case "Préférences de TUN-JOBS sur cet appareil.": return "TUN-JOBS preferences on this device.";
+                case "Confidentialité": return "Privacy";
+                case "Retour aux emplois": return "Back to jobs";
+                case "Accueil": return "Home";
+                case "Offres": return "Jobs";
+                case "Profil": return "Profile";
+                case "Employeurs": return "Employers";
+                case "Plus": return "More";
+                case "Menu TUN-JOBS": return "TUN-JOBS menu";
+                case "À propos": return "About";
+                case "Sites officiels de l'emploi": return "Official employment websites";
+                case "Bureaux régionaux": return "Regional offices";
+                case "Retour": return "Back";
+                case "✓ SYNCHRONISÉ EN LIGNE": return "✓ SYNCED ONLINE";
+                case "⚠ ÉCHEC DE SYNCHRONISATION": return "⚠ SYNC FAILED";
+                case "● ENREGISTRÉ LOCALEMENT • EN ATTENTE": return "● SAVED LOCALLY • PENDING";
+                case "APERÇU PRIVÉ • À COMPLÉTER": return "PRIVATE PREVIEW • INCOMPLETE";
+                case "E-mail et CV restent masqués dans cet aperçu public.": return "Email and CV are hidden from this public preview.";
+                case "Français": return "French";
+                case "English": return "English";
+                case "العربية": return "Arabic";
+                default: break;
+            }
+        }
+        if (!isArabic()) return value;
+        switch (value) {
+            case "Bienvenue sur TUN-JOBS": return "مرحباً بك في TUN-JOBS";
+            case "L'emploi et le recrutement, partout en Tunisie.": return "التشغيل والانتداب في كامل تونس";
+            case "Votre prochain emploi peut commencer ici.": return "فرصتك المهنية القادمة تبدأ من هنا";
+            case "Trouvez des opportunités près de chez vous, consultez les sources officielles et préparez votre profil candidat. Les employeurs peuvent aussi préparer leurs offres.": return "اكتشف فرص العمل بالقرب منك، وتصفّح المصادر الرسمية وأنشئ ملفك المهني. ويمكن للمؤسسات إعداد عروضها أيضاً.";
+            case "Je cherche un emploi": return "أبحث عن عمل";
+            case "Je propose un emploi": return "أعرض وظيفة";
+            case "Ou découvrir TUN-JOBS sans compte": return "أو استكشف TUN-JOBS دون حساب";
+            case "Se connecter": return "تسجيل الدخول";
+            case "Créer un compte": return "إنشاء حساب";
+            case "Langue de l'application": return "لغة التطبيق";
+            case "Changer la langue": return "تغيير اللغة";
+            case "Votre carte candidat": return "بطاقتك المهنية";
+            case "Un profil clair pour présenter votre parcours professionnel.": return "ملف مهني واضح لعرض خبراتك ومسارك";
+            case "Aperçu de votre profil": return "معاينة ملفك الشخصي";
+            case "Modifier mes informations": return "تعديل معلوماتي";
+            case "Nom et prénom": return "الاسم واللقب";
+            case "Téléphone": return "الهاتف";
+            case "Adresse e-mail": return "البريد الإلكتروني";
+            case "Ville / gouvernorat": return "المدينة / الولاية";
+            case "Expérience et métier recherché": return "الخبرة والمهنة المطلوبة";
+            case "Formation / diplôme": return "التكوين / الشهادة";
+            case "Compétences": return "المهارات";
+            case "Disponibilité": return "التوفر";
+            case "Nom et prénom *": return "الاسم واللقب *";
+            case "Téléphone *": return "الهاتف *";
+            case "E-mail": return "البريد الإلكتروني";
+            case "Mot de passe": return "كلمة المرور";
+            case "Mot de passe (6 caractères minimum)": return "كلمة المرور (6 أحرف على الأقل)";
+            case "Ajouter / modifier ma photo": return "إضافة / تغيير صورتي";
+            case "Joindre mon CV (PDF ou document)": return "إرفاق سيرتي الذاتية";
+            case "Aucun CV sélectionné": return "لم يتم اختيار سيرة ذاتية";
+            case "CV enregistré sur cet appareil": return "تم حفظ السيرة الذاتية على هذا الجهاز";
+            case "Enregistrer mon profil sur ce téléphone": return "حفظ ملفي على هذا الهاتف";
+            case "Mes offres sauvegardées": return "عروض العمل المحفوظة";
+            case "Aucune offre sauvegardée pour le moment.": return "لا توجد عروض محفوظة حالياً";
+            case "Paramètres": return "الإعدادات";
+            case "Préférences de TUN-JOBS sur cet appareil.": return "إعدادات TUN-JOBS على هذا الجهاز";
+            case "Confidentialité": return "الخصوصية";
+            case "Retour aux emplois": return "العودة إلى الوظائف";
+            case "Accueil": return "الرئيسية";
+            case "Offres": return "العروض";
+            case "Profil": return "الملف الشخصي";
+            case "Employeurs": return "أصحاب العمل";
+            case "Plus": return "المزيد";
+            case "Menu TUN-JOBS": return "قائمة TUN-JOBS";
+            case "À propos": return "حول التطبيق";
+            case "Sites officiels de l'emploi": return "مواقع التشغيل الرسمية";
+            case "Bureaux régionaux": return "المكاتب الجهوية";
+            case "Retour": return "رجوع";
+            case "✓ SYNCHRONISÉ EN LIGNE": return "✓ تمت المزامنة";
+            case "⚠ ÉCHEC DE SYNCHRONISATION": return "⚠ فشلت المزامنة";
+            case "● ENREGISTRÉ LOCALEMENT • EN ATTENTE": return "● محفوظ محلياً • في انتظار المزامنة";
+            case "APERÇU PRIVÉ • À COMPLÉTER": return "معاينة خاصة • يرجى الإكمال";
+            case "Français": return "الفرنسية";
+            case "English": return "الإنجليزية";
+            case "العربية": return "العربية";
+            case "E-mail et CV restent masqués dans cet aperçu public.": return "يبقى البريد الإلكتروني والسيرة الذاتية مخفيين في هذه المعاينة العامة.";
+            default: return value;
+        }
+    }
+
+    private void selectLanguage(Runnable refresh) {
+        String[] labels = {"Français", "English", "العربية"};
+        String[] codes = {"fr", "en", "ar"};
+        String current = getSharedPreferences("tun_jobs", MODE_PRIVATE).getString("language", "fr");
+        int selected = "ar".equals(current) ? 2 : ("en".equals(current) ? 1 : 0);
+        new AlertDialog.Builder(this)
+                .setTitle("Language / Langue / اللغة")
+                .setSingleChoiceItems(labels, selected, (dialog, which) -> {
+                    getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putString("language", codes[which]).apply();
+                    dialog.dismiss();
+                    refresh.run();
+                })
+                .setNegativeButton("Annuler", null)
+                .show();
+    }
+
+    private void openAccountFromWelcome(boolean create) {
+        preferSignupOnAccount = create;
+        showAccount();
     }
 
     private GradientDrawable shape(int color, int radiusDp) {
@@ -249,7 +456,7 @@ public class MainActivity extends Activity {
 
     private Button button(String label, boolean primary, Runnable action) {
         Button b = new Button(this);
-        b.setText(label);
+        b.setText(tr(label));
         b.setAllCaps(false);
         b.setTextSize(15);
         b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -300,7 +507,7 @@ public class MainActivity extends Activity {
 
     private TextView text(String value, int size, int color, boolean bold) {
         TextView v = new TextView(this);
-        v.setText(value);
+        v.setText(tr(value));
         v.setTextSize(size);
         v.setTextColor(color);
         if (bold) v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -335,6 +542,7 @@ public class MainActivity extends Activity {
 
     /** tab < 0 hides the bottom navigation; title == null hides the title block. */
     private void base(String title, String subtitle, int tab, boolean scrollable) {
+        profileVisible = false;
         if (pendingRootScreen) {
             screenHistory.clear();
         } else if (!restoringScreen && currentScreenAction != null) {
@@ -345,6 +553,8 @@ public class MainActivity extends Activity {
         pendingRootScreen = false;
 
         root = column();
+        root.setLayoutDirection(isArabic() ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+        root.setTextDirection(isArabic() ? View.TEXT_DIRECTION_RTL : View.TEXT_DIRECTION_LTR);
         root.setBackgroundColor(canvas);
         setContentView(root);
         getWindow().setStatusBarColor(canvas);
@@ -626,6 +836,8 @@ public class MainActivity extends Activity {
     private View jobCard(Job job, int index, int total) {
         String badge = job.isOfficial() ? "✓ ANETI • OFFRE OFFICIELLE" : "● Annonce de démonstration";
         String dateLine = job.publishedDate.isEmpty() ? "" : " • Publié le " + job.publishedDate;
+        String distance = distanceLabel(job);
+        if (!distance.isEmpty()) dateLine += " • " + distance;
         return deckCard(palette(job.sector), badge, job.location, sectorGlyph(job.sector),
                 job.title, "🏢  " + job.company, "📍  " + job.location + dateLine,
                 job.description, new String[] {job.sector, job.contract}, (index + 1) + "/" + total);
@@ -833,6 +1045,10 @@ public class MainActivity extends Activity {
 
     // ------------------------------------------------------------------ screens
     private void showHome() {
+        if (SecureSessionStore.read(this).isEmpty()) {
+            showWelcome();
+            return;
+        }
         prepareScreen(true, this::showHome);
         base(null, null, TAB_HOME, false);
 
@@ -872,6 +1088,91 @@ public class MainActivity extends Activity {
         showHome();
     }
 
+    private Location coordinatesForPlace(String place) {
+        if (place == null) return null;
+        String p = place.toLowerCase(Locale.ROOT).trim();
+        double lat, lon;
+        if (p.contains("kasserine")) { lat=35.1676; lon=8.8365; }
+        else if (p.contains("sbeitla")) { lat=35.2364; lon=9.1172; }
+        else if (p.contains("feriana") || p.contains("fériana")) { lat=34.9543; lon=8.5689; }
+        else if (p.contains("thala") || p.contains("tala")) { lat=35.5728; lon=8.6708; }
+        else if (p.contains("kairouan")) { lat=35.6781; lon=10.0963; }
+        else if (p.contains("sfax")) { lat=34.7406; lon=10.7603; }
+        else if (p.contains("tunis")) { lat=36.8065; lon=10.1815; }
+        else if (p.contains("sousse")) { lat=35.8256; lon=10.6084; }
+        else if (p.contains("gafsa")) { lat=34.4250; lon=8.7842; }
+        else if (p.contains("sidi bouzid")) { lat=35.0382; lon=9.4849; }
+        else if (p.contains("gabes") || p.contains("gabès")) { lat=33.8815; lon=10.0982; }
+        else if (p.contains("monastir")) { lat=35.7643; lon=10.8113; }
+        else if (p.contains("bizerte")) { lat=37.2744; lon=9.8739; }
+        else if (p.contains("nabeul")) { lat=36.4513; lon=10.7357; }
+        else if (p.contains("beja") || p.contains("béja")) { lat=36.7256; lon=9.1817; }
+        else if (p.contains("jendouba")) { lat=36.5011; lon=8.7802; }
+        else if (p.contains("le kef") || p.equals("kef")) { lat=36.1742; lon=8.7049; }
+        else if (p.contains("mahdia")) { lat=35.5047; lon=11.0622; }
+        else if (p.contains("tozeur")) { lat=33.9197; lon=8.1335; }
+        else if (p.contains("medenine") || p.contains("médenine")) { lat=33.3549; lon=10.5055; }
+        else if (p.contains("tataouine")) { lat=32.9297; lon=10.4518; }
+        else return null;
+        Location point = new Location("tun-jobs-city"); point.setLatitude(lat); point.setLongitude(lon); return point;
+    }
+
+    private double distanceKm(Job job) {
+        if (userLocation == null || job == null) return Double.NaN;
+        Location destination = coordinatesForPlace(job.location);
+        if (destination == null) destination = coordinatesForPlace(job.governorate);
+        return destination == null ? Double.NaN : userLocation.distanceTo(destination) / 1000.0;
+    }
+
+    private String distanceLabel(Job job) {
+        double km = distanceKm(job);
+        return Double.isNaN(km) ? "" : String.format(Locale.getDefault(), "≈ %.1f km", km);
+    }
+
+    private void enableNearbySort() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[] {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_LOCATION_PERMISSION);
+            return;
+        }
+        try {
+            LocationManager manager = (LocationManager) getSystemService(LOCATION_SERVICE);
+            Location last = manager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            if (last == null) last = manager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (last != null && System.currentTimeMillis() - last.getTime() < 86400000L) { applyUserLocation(last); return; }
+            LocationListener listener = new LocationListener() {
+                @Override public void onLocationChanged(Location value) {
+                    try { manager.removeUpdates(this); } catch (SecurityException ignored) { }
+                    applyUserLocation(value);
+                }
+                @Override public void onProviderEnabled(String provider) { }
+                @Override public void onProviderDisabled(String provider) { }
+                @Deprecated @Override public void onStatusChanged(String provider, int status, Bundle extras) { }
+            };
+            String provider = manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) ? LocationManager.NETWORK_PROVIDER : LocationManager.GPS_PROVIDER;
+            manager.requestLocationUpdates(provider, 0L, 0f, listener, getMainLooper());
+            Toast.makeText(this, "Recherche de votre position…", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Position indisponible. Utilisez les filtres par gouvernorat.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void applyUserLocation(Location value) {
+        userLocation = value; sortByDistance = true;
+        if (locationStatus != null) locationStatus.setText("📍 Position détectée — offres triées par distance approximative entre villes.");
+        renderJobs();
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_LOCATION_PERMISSION) {
+            boolean allowed = false;
+            for (int result : grantResults) if (result == PackageManager.PERMISSION_GRANTED) allowed = true;
+            if (allowed) enableNearbySort();
+            else if (locationStatus != null) locationStatus.setText("Localisation refusée — vous pouvez continuer avec les filtres par gouvernorat.");
+        }
+    }
+
     private void renderJobs() {
         if (resultsContainer == null || searchInput == null) return;
         resultsContainer.removeAllViews();
@@ -889,6 +1190,9 @@ public class MainActivity extends Activity {
             if (!"Tous".equals(contract) && !job.contract.equalsIgnoreCase(contract)) continue;
             visibleJobs.add(job);
         }
+        if (sortByDistance && userLocation != null) Collections.sort(visibleJobs, new Comparator<Job>() {
+            @Override public int compare(Job a, Job b) { return Double.compare(distanceKm(a), distanceKm(b)); }
+        });
         resultsContainer.addView(text(visibleJobs.size() + " offre(s) trouvée(s)", 17, gold, true));
         space(resultsContainer, 2);
         resultsContainer.addView(text("Les annonces de démonstration sont fictives.", 12, muted, false));
@@ -903,7 +1207,8 @@ public class MainActivity extends Activity {
             item.setBackground(shape(panel, 18));
             item.addView(text(job.title, 18, ink, true));
             space(item, 3);
-            item.addView(text(job.company + " • " + job.location, 14, muted, false));
+            String distance = distanceLabel(job);
+            item.addView(text(job.company + " • " + job.location + (distance.isEmpty() ? "" : " • " + distance), 14, muted, false));
             space(item, 10);
             LinearLayout chips = row();
             chips.addView(chip(job.sector, true));
@@ -931,6 +1236,10 @@ public class MainActivity extends Activity {
         searchInput.setHintTextColor(muted);
         searchInput.setBackground(shape(panel, 14));
         content.addView(searchInput, new LinearLayout.LayoutParams(-1, dp(52)));
+        space(content, 8);
+        content.addView(button("📍  Offres les plus proches (GPS)", false, this::enableNearbySort), new LinearLayout.LayoutParams(-1, dp(48)));
+        locationStatus = text("Autorisation demandée uniquement lorsque vous activez le tri GPS. Vous pouvez refuser et continuer sans localisation.", 12, muted, false);
+        content.addView(locationStatus);
         space(content, 12);
 
         governorateFilter = filterSpinner(new String[] {
@@ -1018,6 +1327,149 @@ public class MainActivity extends Activity {
         Toast.makeText(this, added ? "Profil ajouté à la présélection." : "Profil déjà présélectionné.", Toast.LENGTH_SHORT).show();
     }
 
+    private void showAccount() {
+        prepareScreen(false, this::showAccount);
+        android.content.SharedPreferences account = getSharedPreferences("tun_jobs_account", MODE_PRIVATE);
+        String savedEmail = account.getString("email", "");
+        String token = SecureSessionStore.read(this);
+        base("Compte TUN-JOBS", "Connexion sécurisée avec votre compte Supabase.");
+        if (!token.isEmpty()) {
+            content.addView(chip("✓ CONNECTÉ", true));
+            space(content, 10);
+            content.addView(text("Adresse : " + savedEmail, 15, ink, true));
+            space(content, 8);
+            content.addView(text("Votre session est enregistrée sur cet appareil. La synchronisation des profils, offres et candidatures sera activée dans les prochaines étapes.", 13, muted, false));
+            space(content, 16);
+            content.addView(button("Se déconnecter", false, () -> {
+                account.edit().clear().apply();
+                SecureSessionStore.clear(this);
+                screenHistory.clear();
+                Toast.makeText(this, "Déconnecté de TUN-JOBS.", Toast.LENGTH_SHORT).show();
+                showWelcome();
+            }));
+            return;
+        }
+        EditText email = profileField("Adresse e-mail", savedEmail);
+        email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        EditText password = profileField("Mot de passe (6 caractères minimum)", "");
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        content.addView(text("E-mail", 13, muted, true));
+        content.addView(email, new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 10);
+        content.addView(text("Mot de passe", 13, muted, true));
+        content.addView(password, new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 12);
+        if (preferSignupOnAccount) {
+            content.addView(button("Créer un compte", true, () -> submitAuth(email, password, true)), new LinearLayout.LayoutParams(-1, dp(54)));
+            space(content, 8);
+            content.addView(button("Se connecter", false, () -> submitAuth(email, password, false)), new LinearLayout.LayoutParams(-1, dp(54)));
+        } else {
+            content.addView(button("Se connecter", true, () -> submitAuth(email, password, false)), new LinearLayout.LayoutParams(-1, dp(54)));
+            space(content, 8);
+            content.addView(button("Créer un compte", false, () -> submitAuth(email, password, true)), new LinearLayout.LayoutParams(-1, dp(54)));
+        }
+        preferSignupOnAccount = false;
+        space(content, 12);
+        content.addView(text("Après inscription, vérifiez votre boîte e-mail si la confirmation est demandée. N'utilisez pas le même mot de passe que vos autres services.", 12, muted, false));
+    }
+
+    private void syncCandidateProfile(String fullName, String phone, String email, String city, String profession,
+                                      String education, String skills, String availability) {
+        String token = SecureSessionStore.read(this);
+        String userId = getSharedPreferences("tun_jobs_account", MODE_PRIVATE).getString("user_id", "");
+        if (token.isEmpty() || userId.isEmpty()) {
+            getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit().putString("sync_status", "pending").apply();
+            Toast.makeText(this, "Profil enregistré localement. Connectez-vous pour le synchroniser.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this, "Synchronisation du profil…", Toast.LENGTH_SHORT).show();
+        authExecutor.execute(() -> {
+            SupabaseProfile.Result result = SupabaseProfile.upsert(
+                    userId, token, fullName, phone, email, city, profession, education, skills, availability);
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit()
+                        .putString("sync_status", result.ok ? "online" : "pending").apply();
+                if (profileVisible) showProfile();
+                new AlertDialog.Builder(this)
+                        .setTitle(result.ok ? "Profil synchronisé" : "Synchronisation impossible")
+                        .setMessage(result.message)
+                        .setPositiveButton("OK", null).show();
+            });
+        });
+    }
+
+    private void loadRemoteCandidateProfile() {
+        final String token = SecureSessionStore.read(this);
+        final String userId = getSharedPreferences("tun_jobs_account", MODE_PRIVATE).getString("user_id", "");
+        if (token.isEmpty() || userId.isEmpty()) return;
+        authExecutor.execute(() -> {
+            try {
+                SupabaseProfile.ProfileData remote = SupabaseProfile.fetch(userId, token);
+                if (remote == null) return;
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    android.content.SharedPreferences.Editor e = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
+                    e.putString("name", remote.fullName).putString("phone", remote.phone)
+                            .putString("email", remote.email).putString("city", remote.city).putString("experience", remote.profession)
+                            .putString("education", remote.education).putString("skills", remote.skills)
+                            .putString("availability", remote.availability)
+                            .putBoolean("profile_saved", true).putString("sync_status", "online")
+                            .putLong("profile_updated_at", System.currentTimeMillis()).apply();
+                    if (profileVisible) showProfile();
+                });
+            } catch (Exception ignored) {
+                // Keep the last local copy intact when offline or when the session needs re-authentication.
+            }
+        });
+    }
+
+    private void submitAuth(EditText emailField, EditText passwordField, boolean create) {
+        String email = emailField.getText().toString().trim();
+        String password = passwordField.getText().toString();
+        if (email.isEmpty() || !email.contains("@") || password.length() < 6) {
+            Toast.makeText(this, "Saisissez un e-mail valide et un mot de passe d'au moins 6 caractères.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this, create ? "Création du compte…" : "Connexion…", Toast.LENGTH_SHORT).show();
+        authExecutor.execute(() -> {
+            SupabaseAuth.Result result = create ? SupabaseAuth.signUp(email, password) : SupabaseAuth.signIn(email, password);
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                if (!result.ok) {
+                    new AlertDialog.Builder(this).setTitle("Compte TUN-JOBS").setMessage(result.message).setPositiveButton("OK", null).show();
+                    return;
+                }
+                if (!result.accessToken.isEmpty()) {
+                    try {
+                        SecureSessionStore.save(this, result.accessToken, result.refreshToken);
+                        getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit()
+                                .putString("user_id", result.userId)
+                                .putString("email", email).apply();
+                    } catch (Exception secureError) {
+                        new AlertDialog.Builder(this).setTitle("Session non enregistrée")
+                                .setMessage("La connexion a réussi, mais la session sécurisée n'a pas pu être enregistrée sur cet appareil.")
+                                .setPositiveButton("OK", null).show();
+                        return;
+                    }
+                } else {
+                    getSharedPreferences("tun_jobs_account", MODE_PRIVATE).edit().putString("email", email).apply();
+                }
+                new AlertDialog.Builder(this).setTitle(create ? "Inscription" : "Connexion")
+                        .setMessage(result.message).setPositiveButton("Continuer", (d, w) -> {
+                            if (!result.accessToken.isEmpty()) {
+                                getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
+                                showHome();
+                                loadRemoteCandidateProfile();
+                            } else {
+                                preferSignupOnAccount = false;
+                                showAccount();
+                            }
+                        }).show();
+            });
+        });
+    }
+
     private void showMenu() {
         prepareScreen(false, this::showMenu);
         base("Menu TUN-JOBS", "Accès rapide à votre espace et aux réglages.");
@@ -1031,6 +1483,12 @@ public class MainActivity extends Activity {
         banner.addView(text("GASS-OS  •  BY AYMEN GHARSALLI", 13, Color.WHITE, false));
         content.addView(banner);
         space(content, 18);
+        android.content.SharedPreferences account = getSharedPreferences("tun_jobs_account", MODE_PRIVATE);
+        String signedEmail = account.getString("email", "");
+        content.addView(text(signedEmail.isEmpty() ? "Aucun compte connecté" : "Connecté : " + signedEmail, 13, muted, false));
+        space(content, 8);
+        content.addView(button(signedEmail.isEmpty() ? "☁  Connexion / Créer un compte" : "☁  Gérer mon compte en ligne", true, this::showAccount), new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 8);
         content.addView(button("⌂   Emplois", false, this::showHome), new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 8);
         content.addView(button("♙   Mon profil", false, this::showProfile), new LinearLayout.LayoutParams(-1, dp(58)));
@@ -1050,11 +1508,12 @@ public class MainActivity extends Activity {
         android.content.SharedPreferences prefs = getSharedPreferences("tun_jobs", MODE_PRIVATE);
         content.addView(text("Langue de l'application", 20, ink, true));
         space(content, 8);
-        content.addView(text("La traduction complète en arabe, français et anglais sera ajoutée progressivement. Pour le moment, l'interface principale reste en français.", 15, muted, false));
+        content.addView(button("Changer la langue", false, () -> selectLanguage(this::showSettings)),
+                new LinearLayout.LayoutParams(-1, dp(54)));
         space(content, 16);
         content.addView(text("Confidentialité", 18, ink, true));
         space(content, 6);
-        content.addView(text("Votre profil, votre photo, votre CV et les brouillons d'offres sont enregistrés localement. Cette version ne possède pas encore de compte en ligne ni de synchronisation serveur.", 14, muted, false));
+        content.addView(text("Votre profil, votre photo, votre CV et les brouillons restent enregistrés localement pour le moment. La connexion Supabase par e-mail est disponible ; la synchronisation et la publication en ligne sont en cours d’intégration.", 14, muted, false));
         space(content, 16);
         content.addView(button("Réafficher l'écran de bienvenue au prochain lancement", false, () -> {
             prefs.edit().putBoolean("welcome_done", false).apply();
@@ -1192,7 +1651,9 @@ public class MainActivity extends Activity {
         field.setMinimumHeight(0);
         field.setIncludeFontPadding(true);
         field.setGravity(Gravity.CENTER_VERTICAL);
-        field.setHint(hint);
+        field.setHint(tr(hint));
+        field.setLayoutDirection(isArabic() ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+        field.setGravity(isArabic() ? Gravity.CENTER_VERTICAL | Gravity.RIGHT : Gravity.CENTER_VERTICAL);
         field.setText(value);
         field.setPadding(dp(16), dp(6), dp(16), dp(6));
         field.setTextColor(ink);
@@ -1279,39 +1740,54 @@ public class MainActivity extends Activity {
     private void showWelcome() {
         prepareScreen(true, this::showWelcome);
         base("Bienvenue sur TUN-JOBS", "L'emploi et le recrutement, partout en Tunisie.", -1, true);
-        space(content, 26);
-        content.addView(text("Votre prochain emploi peut commencer ici.", 27, ink, true));
-        space(content, 12);
-        content.addView(text("Trouvez des opportunités près de chez vous, consultez les sources officielles et préparez votre profil candidat. Les employeurs peuvent aussi préparer leurs offres.", 16, muted, false));
-        space(content, 26);
-        content.addView(button("Je cherche un emploi", true, () -> {
-            getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
-            employerMode = false;
-            showHome();
-        }), new LinearLayout.LayoutParams(-1, dp(60)));
-        space(content, 12);
-        content.addView(button("Je propose un emploi", false, () -> {
-            getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
-            employerMode = true;
-            showHome();
-        }), new LinearLayout.LayoutParams(-1, dp(60)));
+        content.addView(button("Changer la langue", false, () -> selectLanguage(this::showWelcome)),
+                new LinearLayout.LayoutParams(-1, dp(48)));
         space(content, 22);
-        content.addView(text("TUN-JOBS — Une plateforme tunisienne pour rapprocher candidats et employeurs.", 13, muted, false));
+
+        LinearLayout brand = column();
+        brand.setGravity(Gravity.CENTER_HORIZONTAL);
+        brand.setPadding(dp(20), dp(24), dp(20), dp(24));
+        brand.setBackground(shape(Color.rgb(24, 26, 31), 24));
+        TextView logo = text("TUN-JOBS", 34, Color.WHITE, true);
+        logo.setGravity(Gravity.CENTER);
+        brand.addView(logo, new LinearLayout.LayoutParams(-1, dp(54)));
+        TextView tagline = text("Votre prochain emploi peut commencer ici.", 19, gold, true);
+        tagline.setGravity(Gravity.CENTER);
+        brand.addView(tagline);
+        space(brand, 12);
+        TextView description = text("Trouvez des opportunités près de chez vous, consultez les sources officielles et préparez votre profil candidat. Les employeurs peuvent aussi préparer leurs offres.", 15, muted, false);
+        description.setGravity(Gravity.CENTER);
+        brand.addView(description);
+        content.addView(brand);
+        space(content, 24);
+
+        content.addView(text("Bienvenue !", 24, ink, true));
+        space(content, 6);
+        content.addView(text("Connectez-vous ou créez un compte pour accéder à TUN-JOBS et retrouver votre profil sur vos appareils.", 14, muted, false));
+        space(content, 18);
+        content.addView(button("Se connecter", true, () -> openAccountFromWelcome(false)),
+                new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 10);
+        content.addView(button("Créer un compte", false, () -> openAccountFromWelcome(true)),
+                new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 18);
+        content.addView(text("Connexion sécurisée • Profil synchronisé • Vos données restent protégées", 12, muted, false));
     }
 
     private void showProfile() {
         prepareScreen(true, this::showProfile);
         base("Votre carte candidat", "Un profil clair pour présenter votre parcours professionnel.", TAB_PROFILE, true);
+        profileVisible = true;
 
         android.content.SharedPreferences p = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
         content.addView(text("Aperçu de votre profil", 20, ink, true));
         LinearLayout preview = column();
-        preview.setPadding(dp(18), dp(18), dp(18), dp(18));
-        preview.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {Color.rgb(57, 45, 25), Color.rgb(15, 17, 23), Color.rgb(8, 10, 14)}));
+        preview.setPadding(dp(10), dp(10), dp(10), dp(16));
+        preview.setBackground(shape(Color.rgb(25, 27, 33), 24));
+        FrameLayout hero = new FrameLayout(this);
         ImageView previewPhoto = new ImageView(this);
         previewPhoto.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        previewPhoto.setBackground(shape(Color.rgb(65, 80, 94), 22));
+        previewPhoto.setBackground(shape(Color.rgb(65, 80, 94), 18));
         Uri savedPhoto = savedProfileFileUri(p, "photo_file", "photo_uri", "profile-photo");
         if (savedPhoto != null) {
             previewPhoto.setImageURI(savedPhoto);
@@ -1319,18 +1795,44 @@ public class MainActivity extends Activity {
             previewPhoto.setImageResource(android.R.drawable.ic_menu_camera);
             previewPhoto.setColorFilter(Color.WHITE);
         }
-        LinearLayout.LayoutParams previewPhotoParams = new LinearLayout.LayoutParams(dp(104), dp(104));
-        previewPhotoParams.gravity = Gravity.CENTER_HORIZONTAL;
-        preview.addView(previewPhoto, previewPhotoParams);
+        hero.addView(previewPhoto, new FrameLayout.LayoutParams(-1, dp(224)));
+        LinearLayout identity = column();
+        identity.setPadding(dp(16), dp(30), dp(16), dp(14));
+        identity.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {0x00000000, 0xE8000000}));
+        identity.addView(text(p.getString("name", "Votre nom"), 25, Color.WHITE, true));
+        identity.addView(text(p.getString("experience", "Métier recherché / expérience"), 15, Color.WHITE, true));
+        FrameLayout.LayoutParams identityParams = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        hero.addView(identity, identityParams);
+        preview.addView(hero, new LinearLayout.LayoutParams(-1, dp(224)));
         space(preview, 12);
-        preview.addView(text(p.getString("name", "Votre nom"), 23, Color.WHITE, true));
-        space(preview, 4);
-        preview.addView(text(p.getString("experience", "Métier recherché / expérience"), 15, Color.WHITE, true));
-        preview.addView(text(p.getString("city", "Kasserine") + " • Tunisie", 13, Color.rgb(225, 235, 242), false));
-        space(preview, 8);
-        preview.addView(text(p.getString("skills", "Ajoutez vos compétences pour compléter votre carte."), 13, Color.WHITE, false));
+        preview.addView(text("📍  " + p.getString("city", "Kasserine") + " • Tunisie", 14, Color.WHITE, true));
+        space(preview, 7);
+        String educationPreview = p.getString("education", "");
+        if (!educationPreview.trim().isEmpty()) {
+            preview.addView(text("🎓  " + educationPreview, 13, Color.rgb(218, 222, 230), false));
+            space(preview, 6);
+        }
+        String skillsPreview = p.getString("skills", "");
+        if (!skillsPreview.trim().isEmpty()) {
+            preview.addView(text("COMPÉTENCES  •  " + skillsPreview, 13, Color.rgb(218, 222, 230), false));
+            space(preview, 6);
+        } else {
+            preview.addView(text("Ajoutez vos compétences pour compléter votre carte.", 13, muted, false));
+        }
+        String availabilityPreview = p.getString("availability", "");
+        if (!availabilityPreview.trim().isEmpty()) {
+            space(preview, 8);
+            preview.addView(chip("●  " + availabilityPreview, true));
+        }
         space(preview, 10);
-        preview.addView(text(p.getBoolean("profile_saved", false) ? "PROFIL ENREGISTRÉ SUR CET APPAREIL" : "APERÇU PRIVÉ • À COMPLÉTER", 11, Color.rgb(255, 205, 92), true));
+        String syncState = p.getString("sync_status", "local");
+        String syncLabel = "online".equals(syncState) ? "✓ SYNCHRONISÉ EN LIGNE"
+                : ("failed".equals(syncState) ? "⚠ ÉCHEC DE SYNCHRONISATION"
+                : (p.getBoolean("profile_saved", false) ? "● ENREGISTRÉ LOCALEMENT • EN ATTENTE" : "APERÇU PRIVÉ • À COMPLÉTER"));
+        preview.addView(text(syncLabel, 11, "online".equals(syncState) ? Color.rgb(100, 220, 150) : Color.rgb(255, 205, 92), true));
+        space(preview, 8);
+        preview.addView(text("E-mail et CV restent masqués dans cet aperçu public.", 12, muted, false));
         content.addView(preview);
         space(content, 18);
         content.addView(text("Modifier mes informations", 20, gold, true));
@@ -1388,14 +1890,27 @@ public class MainActivity extends Activity {
             String[] keys = {"name","phone","email","city","experience","education","skills","availability"};
             for (int i=0;i<fields.length;i++) e.putString(keys[i], fields[i].getText().toString().trim());
             e.putBoolean("profile_saved", true);
+            e.putString("sync_status", "pending");
             e.putLong("profile_updated_at", System.currentTimeMillis());
             boolean stored = e.commit();
-            Toast.makeText(this, stored
-                    ? "Profil et informations enregistrés sur cet appareil."
-                    : "Erreur : le profil n'a pas pu être enregistré.", Toast.LENGTH_LONG).show();
+            if (!stored) {
+                Toast.makeText(this, "Erreur : le profil n'a pas pu être enregistré.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            Toast.makeText(this, "Profil enregistré localement.", Toast.LENGTH_SHORT).show();
+            syncCandidateProfile(
+                    fields[0].getText().toString().trim(),
+                    fields[1].getText().toString().trim(),
+                    fields[2].getText().toString().trim(),
+                    fields[3].getText().toString().trim(),
+                    fields[4].getText().toString().trim(),
+                    fields[5].getText().toString().trim(),
+                    fields[6].getText().toString().trim(),
+                    fields[7].getText().toString().trim());
         }), new LinearLayout.LayoutParams(-1, dp(60)));
         space(content, 8);
-        content.addView(text("Enregistrement local : vos informations sont conservées dans l'application et votre photo / CV sont copiés dans son espace privé. Ils restent disponibles après fermeture et redémarrage de l'application. Rien n'est envoyé ni publié.", 13, muted, false));
+        content.addView(text("État du profil : " + ("online".equals(p.getString("sync_status", "local")) ? "synchronisé en ligne" : "enregistré localement, synchronisation en attente").toUpperCase(Locale.ROOT)
+                + ". La photo et le CV restent privés sur cet appareil et ne sont pas envoyés à Supabase.", 13, muted, false));
 
         space(content, 22);
         content.addView(text("Mes offres sauvegardées", 20, ink, true));
