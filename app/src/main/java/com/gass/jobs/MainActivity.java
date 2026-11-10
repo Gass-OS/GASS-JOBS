@@ -1,11 +1,16 @@
 package com.gass.jobs;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.Spannable;
@@ -31,6 +36,8 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -60,6 +67,10 @@ public class MainActivity extends Activity {
     private static final int PICK_PROFILE_CV = 7102;
     private ImageView profilePhotoView;
     private TextView profileCvLabel;
+    private Location userLocation;
+    private boolean sortByDistance = false;
+    private TextView locationStatus;
+    private static final int REQUEST_LOCATION_PERMISSION = 7201;
     private int swipeIndex = 0;
     private int candidateSwipeIndex = 0;
     private final ArrayList<Job> visibleJobs = new ArrayList<Job>();
@@ -626,6 +637,8 @@ public class MainActivity extends Activity {
     private View jobCard(Job job, int index, int total) {
         String badge = job.isOfficial() ? "✓ ANETI • OFFRE OFFICIELLE" : "● Annonce de démonstration";
         String dateLine = job.publishedDate.isEmpty() ? "" : " • Publié le " + job.publishedDate;
+        String distance = distanceLabel(job);
+        if (!distance.isEmpty()) dateLine += " • " + distance;
         return deckCard(palette(job.sector), badge, job.location, sectorGlyph(job.sector),
                 job.title, "🏢  " + job.company, "📍  " + job.location + dateLine,
                 job.description, new String[] {job.sector, job.contract}, (index + 1) + "/" + total);
@@ -872,6 +885,91 @@ public class MainActivity extends Activity {
         showHome();
     }
 
+    private Location coordinatesForPlace(String place) {
+        if (place == null) return null;
+        String p = place.toLowerCase(Locale.ROOT).trim();
+        double lat, lon;
+        if (p.contains("kasserine")) { lat=35.1676; lon=8.8365; }
+        else if (p.contains("sbeitla")) { lat=35.2364; lon=9.1172; }
+        else if (p.contains("feriana") || p.contains("fériana")) { lat=34.9543; lon=8.5689; }
+        else if (p.contains("thala") || p.contains("tala")) { lat=35.5728; lon=8.6708; }
+        else if (p.contains("kairouan")) { lat=35.6781; lon=10.0963; }
+        else if (p.contains("sfax")) { lat=34.7406; lon=10.7603; }
+        else if (p.contains("tunis")) { lat=36.8065; lon=10.1815; }
+        else if (p.contains("sousse")) { lat=35.8256; lon=10.6084; }
+        else if (p.contains("gafsa")) { lat=34.4250; lon=8.7842; }
+        else if (p.contains("sidi bouzid")) { lat=35.0382; lon=9.4849; }
+        else if (p.contains("gabes") || p.contains("gabès")) { lat=33.8815; lon=10.0982; }
+        else if (p.contains("monastir")) { lat=35.7643; lon=10.8113; }
+        else if (p.contains("bizerte")) { lat=37.2744; lon=9.8739; }
+        else if (p.contains("nabeul")) { lat=36.4513; lon=10.7357; }
+        else if (p.contains("beja") || p.contains("béja")) { lat=36.7256; lon=9.1817; }
+        else if (p.contains("jendouba")) { lat=36.5011; lon=8.7802; }
+        else if (p.contains("le kef") || p.equals("kef")) { lat=36.1742; lon=8.7049; }
+        else if (p.contains("mahdia")) { lat=35.5047; lon=11.0622; }
+        else if (p.contains("tozeur")) { lat=33.9197; lon=8.1335; }
+        else if (p.contains("medenine") || p.contains("médenine")) { lat=33.3549; lon=10.5055; }
+        else if (p.contains("tataouine")) { lat=32.9297; lon=10.4518; }
+        else return null;
+        Location point = new Location("tun-jobs-city"); point.setLatitude(lat); point.setLongitude(lon); return point;
+    }
+
+    private double distanceKm(Job job) {
+        if (userLocation == null || job == null) return Double.NaN;
+        Location destination = coordinatesForPlace(job.location);
+        if (destination == null) destination = coordinatesForPlace(job.governorate);
+        return destination == null ? Double.NaN : userLocation.distanceTo(destination) / 1000.0;
+    }
+
+    private String distanceLabel(Job job) {
+        double km = distanceKm(job);
+        return Double.isNaN(km) ? "" : String.format(Locale.getDefault(), "≈ %.1f km", km);
+    }
+
+    private void enableNearbySort() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[] {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_LOCATION_PERMISSION);
+            return;
+        }
+        try {
+            LocationManager manager = (LocationManager) getSystemService(LOCATION_SERVICE);
+            Location last = manager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            if (last == null) last = manager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            if (last != null && System.currentTimeMillis() - last.getTime() < 86400000L) { applyUserLocation(last); return; }
+            LocationListener listener = new LocationListener() {
+                @Override public void onLocationChanged(Location value) {
+                    try { manager.removeUpdates(this); } catch (SecurityException ignored) { }
+                    applyUserLocation(value);
+                }
+                @Override public void onProviderEnabled(String provider) { }
+                @Override public void onProviderDisabled(String provider) { }
+                @Deprecated @Override public void onStatusChanged(String provider, int status, Bundle extras) { }
+            };
+            String provider = manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) ? LocationManager.NETWORK_PROVIDER : LocationManager.GPS_PROVIDER;
+            manager.requestLocationUpdates(provider, 0L, 0f, listener, getMainLooper());
+            Toast.makeText(this, "Recherche de votre position…", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Position indisponible. Utilisez les filtres par gouvernorat.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void applyUserLocation(Location value) {
+        userLocation = value; sortByDistance = true;
+        if (locationStatus != null) locationStatus.setText("📍 Position détectée — offres triées par distance approximative entre villes.");
+        renderJobs();
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_LOCATION_PERMISSION) {
+            boolean allowed = false;
+            for (int result : grantResults) if (result == PackageManager.PERMISSION_GRANTED) allowed = true;
+            if (allowed) enableNearbySort();
+            else if (locationStatus != null) locationStatus.setText("Localisation refusée — vous pouvez continuer avec les filtres par gouvernorat.");
+        }
+    }
+
     private void renderJobs() {
         if (resultsContainer == null || searchInput == null) return;
         resultsContainer.removeAllViews();
@@ -889,6 +987,9 @@ public class MainActivity extends Activity {
             if (!"Tous".equals(contract) && !job.contract.equalsIgnoreCase(contract)) continue;
             visibleJobs.add(job);
         }
+        if (sortByDistance && userLocation != null) Collections.sort(visibleJobs, new Comparator<Job>() {
+            @Override public int compare(Job a, Job b) { return Double.compare(distanceKm(a), distanceKm(b)); }
+        });
         resultsContainer.addView(text(visibleJobs.size() + " offre(s) trouvée(s)", 17, gold, true));
         space(resultsContainer, 2);
         resultsContainer.addView(text("Les annonces de démonstration sont fictives.", 12, muted, false));
@@ -903,7 +1004,8 @@ public class MainActivity extends Activity {
             item.setBackground(shape(panel, 18));
             item.addView(text(job.title, 18, ink, true));
             space(item, 3);
-            item.addView(text(job.company + " • " + job.location, 14, muted, false));
+            String distance = distanceLabel(job);
+            item.addView(text(job.company + " • " + job.location + (distance.isEmpty() ? "" : " • " + distance), 14, muted, false));
             space(item, 10);
             LinearLayout chips = row();
             chips.addView(chip(job.sector, true));
@@ -931,6 +1033,10 @@ public class MainActivity extends Activity {
         searchInput.setHintTextColor(muted);
         searchInput.setBackground(shape(panel, 14));
         content.addView(searchInput, new LinearLayout.LayoutParams(-1, dp(52)));
+        space(content, 8);
+        content.addView(button("📍  Offres les plus proches (GPS)", false, this::enableNearbySort), new LinearLayout.LayoutParams(-1, dp(48)));
+        locationStatus = text("Autorisation demandée uniquement lorsque vous activez le tri GPS. Vous pouvez refuser et continuer sans localisation.", 12, muted, false);
+        content.addView(locationStatus);
         space(content, 12);
 
         governorateFilter = filterSpinner(new String[] {
