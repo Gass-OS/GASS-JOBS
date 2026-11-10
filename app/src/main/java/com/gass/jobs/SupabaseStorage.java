@@ -40,11 +40,11 @@ final class SupabaseStorage {
         } finally { if (c != null) c.disconnect(); }
     }
 
-    static boolean downloadPublicPhoto(String objectPath, File destination) {
+    static boolean downloadPublicPhoto(String objectPath, File destination) throws Exception {
         return download("/storage/v1/object/public/candidate-photos/" + encodePath(objectPath), destination, null);
     }
 
-    static boolean downloadPrivateCv(String objectPath, File destination, String token) {
+    static boolean downloadPrivateCv(String objectPath, File destination, String token) throws Exception {
         return download("/storage/v1/object/authenticated/candidate-cvs/" + encodePath(objectPath), destination, token);
     }
 
