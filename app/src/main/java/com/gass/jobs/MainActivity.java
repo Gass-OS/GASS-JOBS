@@ -8,23 +8,29 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.Spannable;
+import android.text.SpannableString;
+import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
 import android.view.Gravity;
-import android.view.View;
 import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.Spinner;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
-import android.widget.ImageView;
+import android.widget.Toast;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.HashSet;
 import java.util.Set;
-import android.widget.Toast;
 
 public class MainActivity extends Activity {
     private final int ink = Color.rgb(245, 246, 250);
@@ -53,6 +59,12 @@ public class MainActivity extends Activity {
     private int swipeIndex = 0;
     private int candidateSwipeIndex = 0;
     private final ArrayList<Job> visibleJobs = new ArrayList<Job>();
+
+    private static final int TAB_HOME = 0, TAB_OFFERS = 1, TAB_PROFILE = 2, TAB_EMPLOYERS = 3, TAB_MORE = 4;
+    private FrameLayout deckHolder;
+    private LinearLayout actionBar;
+    private TextView likeStamp, nopeStamp;
+    private boolean animating = false;
 
     private static class Job {
         final String title, company, location, governorate, sector, contract, description;
@@ -138,12 +150,91 @@ public class MainActivity extends Activity {
                 .setPositiveButton("Quitter", (dialog, which) -> finish())
                 .show();
     }
+    // ------------------------------------------------------------------ helpers
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
 
-    private GradientDrawable shape(int color, int radius) {
+    private GradientDrawable shape(int color, int radiusDp) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
-        d.setCornerRadius(radius);
+        d.setCornerRadius(dp(radiusDp));
         return d;
+    }
+
+    private GradientDrawable circle(int color) {
+        GradientDrawable d = new GradientDrawable();
+        d.setShape(GradientDrawable.OVAL);
+        d.setColor(color);
+        return d;
+    }
+
+    private GradientDrawable goldGradient(int radiusDp) {
+        GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[] {Color.rgb(255, 204, 75), Color.rgb(222, 145, 8)});
+        d.setCornerRadius(dp(radiusDp));
+        return d;
+    }
+
+    private void space(LinearLayout parent, int heightDp) {
+        View v = new View(this);
+        parent.addView(v, new LinearLayout.LayoutParams(1, dp(heightDp)));
+    }
+
+    private void hspace(LinearLayout parent, int widthDp) {
+        View v = new View(this);
+        parent.addView(v, new LinearLayout.LayoutParams(dp(widthDp), 1));
+    }
+
+    private Button button(String label, boolean primary, Runnable action) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setAllCaps(false);
+        b.setTextSize(15);
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setMinHeight(dp(48));
+        b.setMinimumHeight(dp(48));
+        b.setMinWidth(0);
+        b.setMinimumWidth(0);
+        b.setGravity(Gravity.CENTER);
+        b.setStateListAnimator(null);
+        b.setTextColor(primary ? Color.rgb(20, 20, 22) : ink);
+        b.setBackground(primary ? goldGradient(26) : shape(Color.rgb(39, 41, 47), 26));
+        b.setPadding(dp(16), dp(10), dp(16), dp(10));
+        b.setOnClickListener(v -> action.run());
+        return b;
+    }
+
+    private Button segment(String label, boolean active, Runnable action) {
+        Button b = button(label, active, action);
+        b.setTextSize(14);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setSingleLine(true);
+        b.setEllipsize(TextUtils.TruncateAt.END);
+        if (!active) {
+            b.setBackground(null);
+            b.setTextColor(muted);
+        }
+        return b;
+    }
+
+    private TextView chip(String label, boolean highlight) {
+        TextView c = text(label, 12, highlight ? Color.rgb(20, 20, 22) : Color.WHITE, true);
+        c.setGravity(Gravity.CENTER);
+        c.setBackground(shape(highlight ? gold : Color.rgb(61, 63, 69), 16));
+        c.setPadding(dp(12), dp(6), dp(12), dp(6));
+        return c;
+    }
+
+    private TextView topIcon(String glyph, int sizeSp, Runnable action) {
+        TextView t = new TextView(this);
+        t.setText(glyph);
+        t.setTextSize(sizeSp);
+        t.setTextColor(ink);
+        t.setGravity(Gravity.CENTER);
+        t.setOnClickListener(v -> action.run());
+        return t;
     }
 
     private TextView text(String value, int size, int color, boolean bold) {
@@ -168,34 +259,6 @@ public class MainActivity extends Activity {
         l.setGravity(Gravity.CENTER_VERTICAL);
         return l;
     }
-
-    private void space(LinearLayout parent, int height) {
-        View v = new View(this);
-        parent.addView(v, new LinearLayout.LayoutParams(1, height));
-    }
-
-    private Button button(String label, boolean primary, Runnable action) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-        b.setTextSize(14);
-        b.setIncludeFontPadding(true);
-        b.setMinHeight(0);
-        b.setMinimumHeight(0);
-        b.setMaxLines(2);
-        b.setSingleLine(false);
-        b.setIncludeFontPadding(false);
-        b.setGravity(Gravity.CENTER);
-        b.setTextColor(primary ? Color.rgb(20, 20, 22) : ink);
-        b.setBackground(primary
-                ? new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                    new int[] {Color.rgb(255, 204, 75), Color.rgb(222, 145, 8)})
-                : shape(Color.rgb(39, 41, 47), 24));
-        b.setPadding(8, 3, 8, 3);
-        b.setOnClickListener(v -> action.run());
-        return b;
-    }
-
     private void openExternal(String url) {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
@@ -204,7 +267,13 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ------------------------------------------------------------ screen frame
     private void base(String title, String subtitle) {
+        base(title, subtitle, TAB_MORE, true);
+    }
+
+    /** tab < 0 hides the bottom navigation; title == null hides the title block. */
+    private void base(String title, String subtitle, int tab, boolean scrollable) {
         if (pendingRootScreen) {
             screenHistory.clear();
         } else if (!restoringScreen && currentScreenAction != null) {
@@ -216,169 +285,110 @@ public class MainActivity extends Activity {
 
         root = column();
         root.setBackgroundColor(canvas);
-        root.setClipToPadding(false);
         setContentView(root);
-        // Android 15+ draws edge-to-edge by default for targetSdk 35.
-        // Reserve the status/navigation bar areas so the header and bottom tabs
-        // remain fully visible on gesture-navigation and cutout devices.
         getWindow().setStatusBarColor(canvas);
         getWindow().setNavigationBarColor(canvas);
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        // light icons on our dark background
+        getWindow().getDecorView().setSystemUiVisibility(0);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
             view.setPadding(0, insets.getSystemWindowInsetTop(), 0, insets.getSystemWindowInsetBottom());
             return insets;
         });
 
-        LinearLayout header = column();
-        header.setPadding(16, 8, 16, 12);
-        header.setBackgroundColor(Color.rgb(8, 9, 12));
-        LinearLayout brandRow = row();
-        Button menuButton = button("☰", false, this::showMenu);
-        menuButton.setTextSize(25);
-        menuButton.setContentDescription("Open navigation menu");
-        menuButton.setMinHeight(48);
-        menuButton.setMinimumHeight(48);
-        brandRow.addView(menuButton, new LinearLayout.LayoutParams(56, 52));
-        TextView brand = text("TUN-JOBS", 25, gold, true);
-        LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(0, 52, 1);
-        brandParams.leftMargin = 10;
-        brandRow.addView(brand, brandParams);
-        header.addView(brandRow);
-        space(header, 4);
-        header.addView(text(title, 23, ink, true));
-        header.addView(text(subtitle, 14, muted, false));
-        root.addView(header);
+        // top bar: menu - logo - search - notifications
+        LinearLayout top = row();
+        top.setPadding(dp(8), dp(6), dp(8), dp(6));
+        top.setBackgroundColor(Color.rgb(8, 9, 12));
+        TextView menuIcon = topIcon("☰", 26, this::showMenu);
+        menuIcon.setContentDescription("Menu");
+        top.addView(menuIcon, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        LinearLayout brandBox = column();
+        SpannableString brandText = new SpannableString("TUN-JOBS");
+        brandText.setSpan(new ForegroundColorSpan(gold), 4, 8, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        TextView brand = text("", 24, Color.WHITE, true);
+        brand.setText(brandText);
+        brandBox.addView(brand);
+        brandBox.addView(text("Trouvez votre emploi en Tunisie", 12, muted, false));
+        LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(0, -2, 1);
+        brandParams.leftMargin = dp(6);
+        top.addView(brandBox, brandParams);
+        TextView searchIcon = topIcon("🔍", 20, this::showOffers);
+        searchIcon.setContentDescription("Rechercher");
+        top.addView(searchIcon, new LinearLayout.LayoutParams(dp(44), dp(48)));
+        TextView bellIcon = topIcon("🔔", 20, () ->
+                Toast.makeText(this, "Aucune nouvelle notification.", Toast.LENGTH_SHORT).show());
+        bellIcon.setContentDescription("Notifications");
+        top.addView(bellIcon, new LinearLayout.LayoutParams(dp(44), dp(48)));
+        root.addView(top);
 
-        ScrollView scroll = new ScrollView(this);
+        if (title != null) {
+            LinearLayout head = column();
+            head.setPadding(dp(18), dp(10), dp(18), dp(4));
+            head.addView(text(title, 22, ink, true));
+            if (subtitle != null && !subtitle.isEmpty()) {
+                space(head, 2);
+                head.addView(text(subtitle, 13, muted, false));
+            }
+            root.addView(head);
+        }
+
         content = column();
-        content.setPadding(18, 18, 18, 24);
-        scroll.setFillViewport(true);
-        scroll.setClipToPadding(false);
-        scroll.addView(content);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        if (scrollable) {
+            ScrollView scroll = new ScrollView(this);
+            content.setPadding(dp(16), dp(12), dp(16), dp(24));
+            scroll.setFillViewport(true);
+            scroll.setClipToPadding(false);
+            scroll.addView(content);
+            root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        } else {
+            content.setPadding(dp(14), dp(4), dp(14), dp(6));
+            root.addView(content, new LinearLayout.LayoutParams(-1, 0, 1));
+        }
+        if (tab >= 0) root.addView(buildNav(tab));
+    }
 
+    private View buildNav(int active) {
         LinearLayout nav = row();
         nav.setBackgroundColor(Color.rgb(12, 13, 17));
-        nav.setPadding(3, 5, 3, 5);
-        Button jobsTab = button("⌂  Accueil", true, this::showHome);
-        Button offersTab = button("▣  Offres", false, this::showHome);
-        Button officesTab = button("⌖  Kasserine", false, this::showEmploymentOffices);
-        Button trainingTab = button("◇  Formation", false, this::showOfficialSources);
-        Button profileTab = button("⚙  Profil / Plus", false, this::showMenu);
-        for (Button tab : new Button[] {jobsTab, offersTab, officesTab, trainingTab, profileTab}) {
-            tab.setTextSize(10);
-            tab.setMaxLines(2);
-            tab.setPadding(1, 2, 1, 2);
+        nav.setPadding(0, dp(4), 0, dp(6));
+        String[] icons = {"🏠", "💼", "👤", "🏢", "⚙️"};
+        String[] labels = {"Accueil", "Offres", "Profil", "Employeurs", "Plus"};
+        Runnable[] actions = {this::showHome, this::showOffers, this::showProfile, this::showEmployerSpace, this::showMenu};
+        for (int i = 0; i < 5; i++) {
+            boolean on = i == active;
+            LinearLayout item = column();
+            item.setGravity(Gravity.CENTER_HORIZONTAL);
+            View bar = new View(this);
+            if (on) bar.setBackground(shape(gold, 2));
+            item.addView(bar, new LinearLayout.LayoutParams(dp(26), dp(3)));
+            TextView icon = text(icons[i], 20, Color.WHITE, false);
+            icon.setGravity(Gravity.CENTER);
+            icon.setAlpha(on ? 1f : 0.55f);
+            item.addView(icon, new LinearLayout.LayoutParams(-2, dp(30)));
+            TextView label = text(labels[i], 11, on ? gold : muted, on);
+            label.setGravity(Gravity.CENTER);
+            label.setSingleLine(true);
+            item.addView(label, new LinearLayout.LayoutParams(-2, -2));
+            final Runnable action = actions[i];
+            item.setOnClickListener(v -> action.run());
+            nav.addView(item, new LinearLayout.LayoutParams(0, dp(62), 1));
         }
-        nav.addView(jobsTab, new LinearLayout.LayoutParams(0, 58, 1));
-        nav.addView(offersTab, new LinearLayout.LayoutParams(0, 58, 1));
-        nav.addView(officesTab, new LinearLayout.LayoutParams(0, 58, 1));
-        nav.addView(trainingTab, new LinearLayout.LayoutParams(0, 58, 1));
-        nav.addView(profileTab, new LinearLayout.LayoutParams(0, 58, 1));
-        root.addView(nav);
+        return nav;
     }
 
-    private void card(Job job, int position, int total) {
-        LinearLayout c = column();
-        c.setPadding(0, 0, 0, 0);
-        c.setBackground(shape(Color.rgb(24, 26, 31), 24));
-        c.setClipToOutline(true);
-
-        LinearLayout hero = column();
-        hero.setPadding(20, 20, 20, 20);
-        hero.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[] {Color.rgb(42, 39, 31), Color.rgb(15, 17, 23), Color.rgb(8, 10, 14)}));
-        hero.addView(text("✓  OPPORTUNITÉ À DÉCOUVRIR", 12, gold, true));
-        space(hero, 22);
-        hero.addView(text(job.title, 27, Color.WHITE, true));
-        space(hero, 8);
-        hero.addView(text(job.company, 16, Color.WHITE, true));
-        space(hero, 4);
-        hero.addView(text("⌖  " + job.location + " • " + job.governorate, 14, Color.rgb(224, 235, 242), false));
-        space(hero, 16);
-        LinearLayout chips = row();
-        TextView sectorChip = text(job.sector, 12, Color.rgb(20, 20, 22), true);
-        sectorChip.setBackground(shape(gold, 20));
-        sectorChip.setPadding(12, 7, 12, 7);
-        TextView contractChip = text(job.contract, 12, Color.WHITE, true);
-        contractChip.setBackground(shape(Color.rgb(61, 63, 69), 20));
-        contractChip.setPadding(12, 7, 12, 7);
-        chips.addView(sectorChip);
-        space(chips, 0);
-        chips.addView(contractChip);
-        hero.addView(chips);
-        c.addView(hero);
-
-        LinearLayout details = column();
-        details.setPadding(20, 16, 20, 18);
-        details.setBackgroundColor(Color.rgb(24, 26, 31));
-        details.addView(text("À propos du poste", 17, ink, true));
-        space(details, 6);
-        details.addView(text(job.description, 14, muted, false));
-        space(details, 14);
-        details.addView(text((position + 1) + " / " + total + " • Exemple de démonstration — annonce fictive", 12, muted, false));
-        space(details, 12);
-
-        LinearLayout actions = row();
-        Button pass = button("✕  Passer", false, () -> {
-            swipeIndex++;
-            renderJobs();
-        });
-        Button save = button("★  Sauvegarder", false, () -> {
-            toggleSaved(job);
-            swipeIndex++;
-            renderJobs();
-        });
-        Button detailsButton = button("Voir", true, () -> showJob(job.title, job.company, job.location, job.description));
-        actions.addView(pass, new LinearLayout.LayoutParams(0, 48, 1));
-        actions.addView(save, new LinearLayout.LayoutParams(0, 48, 1));
-        details.addView(actions);
-        space(details, 8);
-        details.addView(detailsButton, new LinearLayout.LayoutParams(-1, 48));
-        c.addView(details);
-
-        final float[] downX = {0f};
-        c.setOnTouchListener((view, event) -> {
-            if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                downX[0] = event.getX();
-                return true;
-            }
-            if (event.getAction() == MotionEvent.ACTION_UP) {
-                float delta = event.getX() - downX[0];
-                if (Math.abs(delta) > 85f) {
-                    view.animate().translationX(delta > 0 ? 520f : -520f).alpha(0.25f).setDuration(150)
-                            .withEndAction(() -> {
-                                view.setTranslationX(0f);
-                                view.setAlpha(1f);
-                                if (delta > 0) toggleSaved(job);
-                                swipeIndex++;
-                                renderJobs();
-                            }).start();
-                } else view.performClick();
-                return true;
-            }
-            return true;
-        });
-        content.addView(c);
-        space(content, 10);
-        content.addView(text("Glissez à gauche pour passer • à droite pour sauvegarder", 12, muted, false));
-    }
-
-    private void toggleSaved(Job job) {
+    private void saveJob(Job job) {
         android.content.SharedPreferences prefs = getSharedPreferences("gass_jobs_saved", MODE_PRIVATE);
         Set<String> saved = new HashSet<String>(prefs.getStringSet("keys", new HashSet<String>()));
-        if (saved.contains(job.key())) saved.remove(job.key());
-        else saved.add(job.key());
+        boolean added = saved.add(job.key());
         prefs.edit().putStringSet("keys", saved).apply();
-        if (resultsContainer != null) renderJobs();
-        Toast.makeText(this, saved.contains(job.key()) ? "Offre enregistrée." : "Offre retirée des favoris.", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, added ? "Offre enregistrée dans votre profil." : "Offre déjà enregistrée.",
+                Toast.LENGTH_SHORT).show();
     }
 
     private void infoCard(String title, String detail, String actionLabel, Runnable action) {
         LinearLayout c = column();
-        c.setPadding(17, 15, 17, 15);
-        c.setBackground(shape(Color.WHITE, 18));
+        c.setPadding(dp(17), dp(15), dp(17), dp(15));
+        c.setBackground(shape(panel, 18));
         c.addView(text(title, 18, ink, true));
         space(c, 8);
         c.addView(text(detail, 14, muted, false));
@@ -391,10 +401,44 @@ public class MainActivity extends Activity {
     private Spinner filterSpinner(String[] values) {
         Spinner spinner = new Spinner(this);
         ArrayAdapter<String> adapter = new ArrayAdapter<String>(
-                this, android.R.layout.simple_spinner_item, values);
+                this, android.R.layout.simple_spinner_item, values) {
+            @Override public View getView(int position, View convertView, ViewGroup parent) {
+                TextView t = (TextView) super.getView(position, convertView, parent);
+                t.setTextColor(ink);
+                t.setTextSize(15);
+                t.setPadding(dp(14), dp(10), dp(14), dp(10));
+                return t;
+            }
+
+            @Override public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                TextView t = (TextView) super.getDropDownView(position, convertView, parent);
+                t.setTextColor(ink);
+                t.setTextSize(15);
+                t.setBackgroundColor(panel);
+                t.setPadding(dp(16), dp(14), dp(16), dp(14));
+                return t;
+            }
+        };
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinner.setAdapter(adapter);
+        spinner.setPopupBackgroundDrawable(shape(panel, 12));
         return spinner;
+    }
+
+    /** Adds a label + dark rounded spinner box to the current content column. */
+    private void addSpinner(String label, Spinner spinner) {
+        content.addView(text(label, 13, muted, true));
+        space(content, 4);
+        FrameLayout box = new FrameLayout(this);
+        box.setBackground(shape(panel, 14));
+        spinner.setBackground(null);
+        box.addView(spinner, new FrameLayout.LayoutParams(-1, -1));
+        TextView arrow = text("▾", 18, muted, true);
+        FrameLayout.LayoutParams arrowParams = new FrameLayout.LayoutParams(-2, -2, Gravity.END | Gravity.CENTER_VERTICAL);
+        arrowParams.rightMargin = dp(14);
+        box.addView(arrow, arrowParams);
+        content.addView(box, new LinearLayout.LayoutParams(-1, dp(48)));
+        space(content, 10);
     }
 
     private String selected(Spinner spinner) {
@@ -402,17 +446,355 @@ public class MainActivity extends Activity {
         return value == null ? "Tous" : value.toString();
     }
 
+    // ------------------------------------------------------------- swipe deck
+    private int[] palette(String seed) {
+        int[][] palettes = {
+            {Color.rgb(84, 64, 26), Color.rgb(36, 29, 20), Color.rgb(12, 12, 14)},
+            {Color.rgb(24, 70, 88), Color.rgb(14, 32, 42), Color.rgb(10, 12, 16)},
+            {Color.rgb(70, 42, 94), Color.rgb(28, 19, 42), Color.rgb(11, 10, 16)},
+            {Color.rgb(26, 80, 60), Color.rgb(14, 36, 29), Color.rgb(10, 14, 13)},
+            {Color.rgb(92, 42, 42), Color.rgb(38, 19, 21), Color.rgb(14, 10, 11)}
+        };
+        return palettes[Math.abs(seed.hashCode() % palettes.length)];
+    }
+
+    private String sectorGlyph(String sector) {
+        if ("Commerce".equals(sector)) return "🛒";
+        if ("Informatique".equals(sector)) return "💻";
+        if ("Agriculture".equals(sector)) return "🌾";
+        if ("Bâtiment".equals(sector)) return "🏗️";
+        if ("Santé".equals(sector)) return "🩺";
+        if ("Transport".equals(sector)) return "🚚";
+        return "💼";
+    }
+
+    private TextView stamp(String label, int color, int rotation) {
+        TextView t = text(label, 22, color, true);
+        t.setGravity(Gravity.CENTER);
+        t.setPadding(dp(12), dp(4), dp(12), dp(4));
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(Color.argb(60, 0, 0, 0));
+        g.setCornerRadius(dp(8));
+        g.setStroke(dp(3), color);
+        t.setBackground(g);
+        t.setRotation(rotation);
+        t.setAlpha(0f);
+        return t;
+    }
+
+    private FrameLayout deckCard(int[] colors, String badge, String place, String glyph, String title,
+                                 String line1, String line2, String desc, String[] chips, String counter) {
+        FrameLayout card = new FrameLayout(this);
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, colors);
+        bg.setCornerRadius(dp(28));
+        card.setBackground(bg);
+        card.setClipToOutline(true);
+
+        TextView avatar = text(glyph, 52, Color.WHITE, true);
+        avatar.setGravity(Gravity.CENTER);
+        avatar.setBackground(circle(Color.argb(46, 255, 255, 255)));
+        FrameLayout.LayoutParams avatarParams = new FrameLayout.LayoutParams(dp(112), dp(112), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        avatarParams.topMargin = dp(64);
+        card.addView(avatar, avatarParams);
+
+        TextView badgeView = text(badge, 12, Color.WHITE, true);
+        badgeView.setBackground(shape(Color.rgb(24, 128, 82), 16));
+        badgeView.setPadding(dp(12), dp(6), dp(12), dp(6));
+        FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
+        badgeParams.setMargins(dp(16), dp(16), 0, 0);
+        card.addView(badgeView, badgeParams);
+
+        TextView placeView = text("📍 " + place, 13, Color.rgb(20, 20, 22), true);
+        placeView.setBackground(shape(Color.argb(240, 255, 255, 255), 16));
+        placeView.setPadding(dp(12), dp(6), dp(12), dp(6));
+        FrameLayout.LayoutParams placeParams = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+        placeParams.setMargins(0, dp(16), dp(16), 0);
+        card.addView(placeView, placeParams);
+
+        TextView counterView = text(counter, 12, Color.WHITE, true);
+        counterView.setBackground(shape(Color.argb(150, 0, 0, 0), 14));
+        counterView.setPadding(dp(10), dp(5), dp(10), dp(5));
+        FrameLayout.LayoutParams counterParams = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+        counterParams.setMargins(0, dp(58), dp(16), 0);
+        card.addView(counterView, counterParams);
+
+        LinearLayout info = column();
+        info.setPadding(dp(18), dp(80), dp(18), dp(18));
+        info.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {Color.argb(0, 0, 0, 0), Color.argb(215, 0, 0, 0), Color.argb(245, 0, 0, 0)}));
+        info.addView(text(title, 26, Color.WHITE, true));
+        space(info, 6);
+        info.addView(text(line1, 16, Color.rgb(255, 214, 120), true));
+        space(info, 3);
+        info.addView(text(line2, 14, Color.rgb(225, 230, 238), false));
+        space(info, 10);
+        View divider = new View(this);
+        divider.setBackgroundColor(Color.argb(70, 255, 255, 255));
+        info.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
+        space(info, 10);
+        TextView descView = text(desc, 14, Color.rgb(235, 238, 244), false);
+        descView.setMaxLines(2);
+        descView.setEllipsize(TextUtils.TruncateAt.END);
+        info.addView(descView);
+        space(info, 12);
+        LinearLayout chipRow = row();
+        for (int i = 0; i < chips.length && i < 3; i++) {
+            TextView c = text(chips[i], 12, i == 0 ? Color.rgb(20, 20, 22) : Color.WHITE, true);
+            c.setGravity(Gravity.CENTER);
+            c.setSingleLine(true);
+            c.setEllipsize(TextUtils.TruncateAt.END);
+            c.setBackground(shape(i == 0 ? gold : Color.argb(120, 70, 74, 84), 16));
+            c.setPadding(dp(8), dp(7), dp(8), dp(7));
+            if (i > 0) hspace(chipRow, 6);
+            chipRow.addView(c, new LinearLayout.LayoutParams(0, -2, 1));
+        }
+        info.addView(chipRow);
+        card.addView(info, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+
+        likeStamp = stamp("ENREGISTRER", Color.rgb(46, 204, 113), -14);
+        FrameLayout.LayoutParams likeParams = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
+        likeParams.setMargins(dp(20), dp(110), 0, 0);
+        card.addView(likeStamp, likeParams);
+        nopeStamp = stamp("PASSER", Color.rgb(255, 82, 82), 14);
+        FrameLayout.LayoutParams nopeParams = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+        nopeParams.setMargins(0, dp(110), dp(20), 0);
+        card.addView(nopeStamp, nopeParams);
+        return card;
+    }
+
+    private View jobCard(Job job, int index, int total) {
+        return deckCard(palette(job.sector), "● Annonce de démonstration", job.location, sectorGlyph(job.sector),
+                job.title, "🏢  " + job.company, "📍  " + job.location + " • " + job.governorate,
+                job.description, new String[] {job.sector, job.contract}, (index + 1) + "/" + total);
+    }
+
+    private View candidateCard(Candidate c, int index, int total) {
+        String[] skills = c.skills.split(" • ");
+        String[] chips = new String[Math.min(3, skills.length)];
+        for (int i = 0; i < chips.length; i++) chips[i] = skills[i];
+        return deckCard(palette(c.name), "✓ Profil de démonstration", c.city,
+                c.name.substring(0, 1).toUpperCase(Locale.ROOT),
+                c.name, "💼  " + c.profession, "🎓  " + c.education + " • " + c.experience,
+                "● " + c.availability + " — profil fictif, aucun contact réel.", chips, (index + 1) + "/" + total);
+    }
+
+    private void fly(View card, int direction, Runnable after) {
+        if (animating) return;
+        animating = true;
+        float distance = getResources().getDisplayMetrics().widthPixels * 1.2f;
+        card.animate().translationX(direction * distance).rotation(direction * 18f).alpha(0f)
+                .setDuration(220).withEndAction(after).start();
+    }
+
+    private void attachSwipe(final View card, final TextView like, final TextView nope,
+                             final Runnable onLeft, final Runnable onRight, final Runnable onTap) {
+        final float[] startX = {0f};
+        final boolean[] moved = {false};
+        card.setOnTouchListener((v, e) -> {
+            if (animating) return true;
+            int action = e.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                startX[0] = e.getRawX();
+                moved[0] = false;
+                if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(true);
+                return true;
+            }
+            float dx = e.getRawX() - startX[0];
+            if (action == MotionEvent.ACTION_MOVE) {
+                if (Math.abs(dx) > dp(8)) moved[0] = true;
+                v.setTranslationX(dx);
+                v.setRotation(dx / Math.max(1, v.getWidth()) * 14f);
+                float progress = Math.min(1f, Math.abs(dx) / (Math.max(1, v.getWidth()) * 0.3f));
+                like.setAlpha(dx > 0 ? progress : 0f);
+                nope.setAlpha(dx < 0 ? progress : 0f);
+                return true;
+            }
+            if (action == MotionEvent.ACTION_UP) {
+                if (Math.abs(dx) > v.getWidth() * 0.3f) {
+                    fly(v, dx > 0 ? 1 : -1, dx > 0 ? onRight : onLeft);
+                } else {
+                    v.animate().translationX(0f).rotation(0f).setDuration(160).start();
+                    like.setAlpha(0f);
+                    nope.setAlpha(0f);
+                    if (!moved[0]) onTap.run();
+                }
+                return true;
+            }
+            if (action == MotionEvent.ACTION_CANCEL) {
+                v.animate().translationX(0f).rotation(0f).setDuration(160).start();
+                like.setAlpha(0f);
+                nope.setAlpha(0f);
+            }
+            return true;
+        });
+    }
+
+    private void addAction(String glyph, String label, int color, int sizeDp, Runnable action) {
+        LinearLayout col = column();
+        col.setGravity(Gravity.CENTER_HORIZONTAL);
+        TextView b = new TextView(this);
+        b.setText(glyph);
+        b.setTextSize(sizeDp >= 58 ? 26 : 22);
+        b.setTextColor(Color.WHITE);
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setGravity(Gravity.CENTER);
+        b.setBackground(circle(color));
+        b.setContentDescription(label);
+        b.setOnClickListener(v -> action.run());
+        col.addView(b, new LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp)));
+        TextView l = text(label, 11, muted, false);
+        l.setTextSize(10.5f);
+        l.setSingleLine(true);
+        l.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(-2, -2);
+        labelParams.topMargin = dp(4);
+        col.addView(l, labelParams);
+        actionBar.addView(col, new LinearLayout.LayoutParams(0, -2, 1));
+    }
+
+    private View emptyDeck(final boolean candidates) {
+        LinearLayout box = column();
+        box.setGravity(Gravity.CENTER);
+        box.setPadding(dp(24), dp(24), dp(24), dp(24));
+        box.setBackground(shape(panel, 28));
+        TextView icon = text("✓", 54, gold, true);
+        icon.setGravity(Gravity.CENTER);
+        box.addView(icon);
+        space(box, 8);
+        TextView msg = text(candidates ? "Vous avez parcouru tous les profils de démonstration."
+                : "Vous avez parcouru toutes les offres de démonstration.", 18, ink, true);
+        msg.setGravity(Gravity.CENTER);
+        box.addView(msg);
+        space(box, 18);
+        box.addView(button("Recommencer", true, () -> {
+            if (candidates) candidateSwipeIndex = 0; else swipeIndex = 0;
+            renderDeck();
+        }), new LinearLayout.LayoutParams(-1, dp(52)));
+        return box;
+    }
+
+    private void showCandidateDialog(Candidate c) {
+        new AlertDialog.Builder(this)
+                .setTitle(c.name + " — " + c.profession)
+                .setMessage("Ville : " + c.city + "\nExpérience : " + c.experience
+                        + "\nFormation : " + c.education + "\nCompétences : " + c.skills
+                        + "\nDisponibilité : " + c.availability
+                        + "\n\nProfil fictif de démonstration. Aucun contact réel n'est associé.")
+                .setPositiveButton("Fermer", (dialog, which) -> dialog.dismiss()).show();
+    }
+
+    private void renderDeck() {
+        animating = false;
+        deckHolder.removeAllViews();
+        actionBar.removeAllViews();
+        final boolean candidates = employerMode;
+        final int total = candidates ? demoCandidates.size() : demoJobs.size();
+        final int index = candidates ? candidateSwipeIndex : swipeIndex;
+        if (index >= total) {
+            deckHolder.addView(emptyDeck(candidates), new FrameLayout.LayoutParams(-1, -1));
+            return;
+        }
+        if (index + 1 < total) {
+            View behind = new View(this);
+            behind.setBackground(shape(Color.rgb(26, 28, 34), 28));
+            FrameLayout.LayoutParams behindParams = new FrameLayout.LayoutParams(-1, -1);
+            behindParams.setMargins(dp(16), dp(16), dp(16), 0);
+            deckHolder.addView(behind, behindParams);
+        }
+        final Job job = candidates ? null : demoJobs.get(index);
+        final Candidate person = candidates ? demoCandidates.get(index) : null;
+        final View card = candidates ? candidateCard(person, index, total) : jobCard(job, index, total);
+        final TextView like = likeStamp;
+        final TextView nope = nopeStamp;
+        FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(-1, -1);
+        cardParams.bottomMargin = dp(14);
+        deckHolder.addView(card, cardParams);
+
+        final Runnable nextCard = () -> {
+            if (candidates) candidateSwipeIndex++; else swipeIndex++;
+            renderDeck();
+        };
+        final Runnable saveThenNext = () -> {
+            if (candidates) saveCandidate(person); else saveJob(job);
+            nextCard.run();
+        };
+        final Runnable details = () -> {
+            if (candidates) showCandidateDialog(person);
+            else showJob(job.title, job.company, job.location, job.description);
+        };
+        attachSwipe(card, like, nope, nextCard, saveThenNext, details);
+
+        addAction("↺", "Retour", Color.rgb(52, 54, 62), 50, () -> {
+            if (candidates) candidateSwipeIndex = Math.max(0, candidateSwipeIndex - 1);
+            else swipeIndex = Math.max(0, swipeIndex - 1);
+            renderDeck();
+        });
+        addAction("✕", "Ignorer", Color.rgb(229, 57, 53), 58, () -> {
+            nope.setAlpha(1f);
+            fly(card, -1, nextCard);
+        });
+        addAction("★", "Sauvegarder", Color.rgb(245, 178, 35), 58, () -> {
+            like.setAlpha(1f);
+            fly(card, 1, saveThenNext);
+        });
+        addAction("♥", "Contacter", Color.rgb(30, 170, 95), 58, () -> {
+            if (candidates) {
+                Toast.makeText(this, "Profil fictif : le contact sera disponible avec un compte sécurisé.", Toast.LENGTH_LONG).show();
+            } else {
+                showNotice();
+            }
+        });
+        addAction("➤", "Partager", Color.rgb(35, 110, 230), 50, () -> {
+            String message = candidates
+                    ? "Découvrez TUN-JOBS, l'application emploi et recrutement en Tunisie."
+                    : job.title + " — " + job.company + ", " + job.location
+                      + " (annonce de démonstration) • via TUN-JOBS";
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(Intent.EXTRA_TEXT, message);
+            startActivity(Intent.createChooser(send, "Partager"));
+        });
+    }
+
+    // ------------------------------------------------------------------ screens
+    private void showHome() {
+        prepareScreen(true, this::showHome);
+        base(null, null, TAB_HOME, false);
+
+        LinearLayout switcher = row();
+        switcher.setBackground(shape(Color.rgb(22, 24, 30), 28));
+        switcher.setPadding(dp(4), dp(4), dp(4), dp(4));
+        switcher.addView(segment("♙  Cherche un emploi", !employerMode, () -> { employerMode = false; showHome(); }),
+                new LinearLayout.LayoutParams(0, dp(44), 1));
+        switcher.addView(segment("▣  Propose un emploi", employerMode, () -> { employerMode = true; showHome(); }),
+                new LinearLayout.LayoutParams(0, dp(44), 1));
+        content.addView(switcher, new LinearLayout.LayoutParams(-1, -2));
+        space(content, 10);
+
+        deckHolder = new FrameLayout(this);
+        content.addView(deckHolder, new LinearLayout.LayoutParams(-1, 0, 1));
+        space(content, 6);
+
+        actionBar = row();
+        actionBar.setGravity(Gravity.CENTER);
+        actionBar.setPadding(0, dp(2), 0, dp(2));
+        content.addView(actionBar, new LinearLayout.LayoutParams(-1, -2));
+        renderDeck();
+    }
+
+    private void showCandidateDeck() {
+        employerMode = true;
+        showHome();
+    }
+
     private void renderJobs() {
-        if (resultsContainer == null) return;
+        if (resultsContainer == null || searchInput == null) return;
         resultsContainer.removeAllViews();
-        LinearLayout previousContent = content;
-        content = resultsContainer;
         String query = searchInput.getText().toString().trim().toLowerCase(Locale.ROOT);
         String governorate = selected(governorateFilter);
         String sector = selected(sectorFilter);
         String contract = selected(contractFilter);
         visibleJobs.clear();
-
         for (Job job : demoJobs) {
             String searchable = (job.title + " " + job.company + " " + job.location + " " + job.governorate + " "
                     + job.sector + " " + job.contract + " " + job.description).toLowerCase(Locale.ROOT);
@@ -422,284 +804,125 @@ public class MainActivity extends Activity {
             if (!"Tous".equals(contract) && !job.contract.equalsIgnoreCase(contract)) continue;
             visibleJobs.add(job);
         }
-
-        content.addView(text("Découvrir les offres", 20, gold, true));
-        space(content, 5);
-        content.addView(text("Un format de cartes à parcourir, inspiré des applications de rencontre professionnelle. Les annonces de démonstration sont fictives.", 12, muted, false));
-        space(content, 12);
+        resultsContainer.addView(text(visibleJobs.size() + " offre(s) trouvée(s)", 17, gold, true));
+        space(resultsContainer, 2);
+        resultsContainer.addView(text("Les annonces de démonstration sont fictives.", 12, muted, false));
+        space(resultsContainer, 10);
         if (visibleJobs.isEmpty()) {
-            content.addView(text("Aucune offre ne correspond à ces filtres.", 15, muted, false));
-        } else if (swipeIndex >= visibleJobs.size()) {
-            content.addView(text("Vous avez parcouru toutes les offres de cette sélection.", 16, ink, true));
-            space(content, 8);
-            content.addView(button("Recommencer les cartes", true, () -> {
-                swipeIndex = 0;
-                renderJobs();
-            }));
-        } else {
-            card(visibleJobs.get(swipeIndex), swipeIndex, visibleJobs.size());
-            space(content, 8);
-            content.addView(button("Voir toutes les offres en liste", false, () -> {
-                LinearLayout previous = content;
-                content = resultsContainer;
-                resultsContainer.removeAllViews();
-                for (Job job : visibleJobs) {
-                    LinearLayout item = column();
-                    item.setPadding(16, 14, 16, 14);
-                    item.setBackground(shape(Color.WHITE, 18));
-                    item.addView(text(job.title, 18, ink, true));
-                    space(item, 4);
-                    item.addView(text(job.company + " • " + job.location + " • " + job.sector, 13, muted, false));
-                    space(item, 8);
-                    item.addView(button("Voir l'offre", true, () -> showJob(job.title, job.company, job.location, job.description)));
-                    content.addView(item);
-                    space(content, 8);
-                }
-                content = previous;
-            }));
-        }
-        content = previousContent;
-    }
-
-    private void showHome() {
-        prepareScreen(true, this::showHome);
-        base("Trouvez votre prochain emploi", "Les opportunités près de chez vous, en Tunisie.");
-        LinearLayout switcher = row();
-        switcher.addView(button("Chercher un emploi", !employerMode, () -> { employerMode = false; showHome(); }),
-                new LinearLayout.LayoutParams(0, 44, 1));
-        switcher.addView(button("Recruter", employerMode, () -> { employerMode = true; showHome(); }),
-                new LinearLayout.LayoutParams(0, 44, 1));
-        content.addView(switcher);
-        space(content, 12);
-        content.addView(button("Trouver un bureau de l'emploi", false, this::showEmploymentOffices));
-        space(content, 8);
-        content.addView(button("Consulter les sources officielles d'emploi", false, this::showOfficialSources));
-        space(content, 18);
-
-        if (employerMode) {
-            content.addView(text("Votre espace recruteur", 21, ink, true));
-            space(content, 8);
-            content.addView(text("Découvrez des profils candidats présentés sous forme de cartes, puis préparez vos offres d'emploi.", 14, muted, false));
-            space(content, 12);
-            content.addView(button("♡  Découvrir les candidats", true, this::showCandidateDeck),
-                    new LinearLayout.LayoutParams(-1, 58));
-            space(content, 12);
-            content.addView(text("Les profils affichés dans cette démonstration sont fictifs. Aucun candidat réel n'est publié ni contacté.", 12, muted, false));
-            space(content, 14);
-            content.addView(text("Préparez une annonce pour les candidats de Kasserine et de toute la Tunisie. Votre brouillon reste uniquement sur cet appareil : il n'est pas publié ni transmis.", 14, muted, false));
-            space(content, 14);
-            content.addView(button("＋  Créer une offre", true, this::showEmployerDraft), new LinearLayout.LayoutParams(-1, 54));
-            space(content, 14);
-            android.content.SharedPreferences draft = getSharedPreferences("gass_jobs_drafts", MODE_PRIVATE);
-            if (draft.contains("title")) {
-                LinearLayout offer = column();
-                offer.setPadding(18, 18, 18, 18);
-                offer.setBackground(shape(Color.rgb(22, 35, 52), 22));
-                offer.addView(text("APERÇU DE VOTRE OFFRE", 12, Color.rgb(255, 205, 92), true));
-                space(offer, 14);
-                offer.addView(text(draft.getString("title", "Votre poste"), 24, Color.WHITE, true));
-                space(offer, 6);
-                offer.addView(text(draft.getString("company", "Votre entreprise") + " • " + draft.getString("governorate", "Tunisie"), 14, Color.rgb(220, 230, 238), false));
-                space(offer, 10);
-                offer.addView(text(draft.getString("sector", "Secteur") + " • " + draft.getString("contract", "Contrat"), 13, Color.rgb(255, 205, 92), true));
-                space(offer, 8);
-                offer.addView(text(draft.getString("description", ""), 14, Color.WHITE, false));
-                space(offer, 12);
-                offer.addView(text("BROUILLON PRIVÉ • NON PUBLIÉ", 11, Color.rgb(255, 205, 92), true));
-                content.addView(offer);
-                space(content, 12);
-                content.addView(button("Modifier mon offre", false, this::showEmployerDraft));
-            } else {
-                content.addView(text("Votre première annonce apparaîtra ici sous forme de carte professionnelle. Elle restera privée jusqu'à la mise en place de la publication sécurisée.", 14, muted, false));
-            }
-            space(content, 10);
-            content.addView(button("Voir les sources officielles", false, () -> openExternal(MINISTRY_DIRECTORY)));
+            resultsContainer.addView(text("Aucune offre ne correspond à ces filtres.", 15, muted, false));
             return;
         }
+        for (final Job job : visibleJobs) {
+            LinearLayout item = column();
+            item.setPadding(dp(16), dp(14), dp(16), dp(14));
+            item.setBackground(shape(panel, 18));
+            item.addView(text(job.title, 18, ink, true));
+            space(item, 3);
+            item.addView(text(job.company + " • " + job.location, 14, muted, false));
+            space(item, 10);
+            LinearLayout chips = row();
+            chips.addView(chip(job.sector, true));
+            hspace(chips, 8);
+            chips.addView(chip(job.contract, false));
+            item.addView(chips);
+            space(item, 12);
+            item.addView(button("Voir l'offre", true,
+                    () -> showJob(job.title, job.company, job.location, job.description)),
+                    new LinearLayout.LayoutParams(-1, dp(46)));
+            resultsContainer.addView(item);
+            space(resultsContainer, 10);
+        }
+    }
 
-        content.addView(text("Trouver votre prochain match professionnel", 20, ink, true));
-        space(content, 8);
+    private void showOffers() {
+        prepareScreen(true, this::showOffers);
+        base("Offres d'emploi", "Recherchez par métier, lieu, secteur ou contrat.", TAB_OFFERS, true);
         searchInput = new EditText(this);
         searchInput.setSingleLine(true);
-        searchInput.setTextSize(15);
+        searchInput.setTextSize(16);
         searchInput.setHint("Métier, mot-clé ou entreprise");
-        searchInput.setPadding(14, 10, 14, 10);
+        searchInput.setPadding(dp(16), dp(10), dp(16), dp(10));
         searchInput.setTextColor(ink);
         searchInput.setHintTextColor(muted);
         searchInput.setBackground(shape(panel, 14));
-        content.addView(searchInput, new LinearLayout.LayoutParams(-1, 52));
-        space(content, 10);
+        content.addView(searchInput, new LinearLayout.LayoutParams(-1, dp(52)));
+        space(content, 12);
 
-        content.addView(text("Gouvernorat", 13, muted, true));
         governorateFilter = filterSpinner(new String[] {
                 "Tous", "Kasserine", "Tunis", "Ariana", "Ben Arous", "Manouba", "Nabeul",
                 "Zaghouan", "Bizerte", "Béja", "Jendouba", "Le Kef", "Siliana", "Kairouan",
                 "Sidi Bouzid", "Sousse", "Monastir", "Mahdia", "Sfax", "Gafsa", "Tozeur",
                 "Kébili", "Gabès", "Médenine", "Tataouine"
         });
-        content.addView(governorateFilter, new LinearLayout.LayoutParams(-1, 44));
-        space(content, 6);
-
-        content.addView(text("Secteur", 13, muted, true));
+        addSpinner("Gouvernorat", governorateFilter);
         sectorFilter = filterSpinner(new String[] {
                 "Tous", "Agriculture", "Bâtiment", "Commerce", "Informatique", "Santé", "Transport"
         });
-        content.addView(sectorFilter, new LinearLayout.LayoutParams(-1, 44));
-        space(content, 6);
-
-        content.addView(text("Type de contrat", 13, muted, true));
-        contractFilter = filterSpinner(new String[] {
-                "Tous", "CDI", "CDD", "Temps plein", "Saisonnier"
-        });
-        content.addView(contractFilter, new LinearLayout.LayoutParams(-1, 44));
-        space(content, 12);
+        addSpinner("Secteur", sectorFilter);
+        contractFilter = filterSpinner(new String[] {"Tous", "CDI", "CDD", "Temps plein", "Saisonnier"});
+        addSpinner("Type de contrat", contractFilter);
 
         LinearLayout filterActions = row();
-        filterActions.addView(button("Rechercher", true, this::renderJobs),
-                new LinearLayout.LayoutParams(0, 44, 1));
+        filterActions.addView(button("Rechercher", true, this::renderJobs), new LinearLayout.LayoutParams(0, dp(48), 1));
+        hspace(filterActions, 10);
         filterActions.addView(button("Effacer", false, () -> {
             searchInput.setText("");
             governorateFilter.setSelection(0);
             sectorFilter.setSelection(0);
             contractFilter.setSelection(0);
-            swipeIndex = 0;
             renderJobs();
-        }), new LinearLayout.LayoutParams(0, 44, 1));
+        }), new LinearLayout.LayoutParams(0, dp(48), 1));
         content.addView(filterActions);
         space(content, 18);
         resultsContainer = column();
         content.addView(resultsContainer);
         renderJobs();
+        space(content, 8);
+        content.addView(button("Trouver un bureau de l'emploi", false, this::showEmploymentOffices));
+        space(content, 8);
+        content.addView(button("Consulter les sources officielles d'emploi", false, this::showOfficialSources));
     }
 
-
-    private void showCandidateDeck() {
-        prepareScreen(false, this::showCandidateDeck);
-        base("Découvrir les candidats", "Parcourez les profils et présélectionnez les compétences utiles.");
-        content.addView(text("CANDIDATS  •  FORMAT CARTE", 13, gold, true));
+    private void showEmployerSpace() {
+        prepareScreen(true, this::showEmployerSpace);
+        base("Espace recruteur", "Préparez vos offres et découvrez des profils.", TAB_EMPLOYERS, true);
+        content.addView(text("Découvrez des profils candidats sous forme de cartes, puis préparez vos offres d'emploi.", 14, muted, false));
+        space(content, 14);
+        content.addView(button("♥  Découvrir les candidats", true, this::showCandidateDeck),
+                new LinearLayout.LayoutParams(-1, dp(56)));
         space(content, 6);
-        content.addView(text("Glissez à gauche pour passer, à droite pour ajouter un profil à votre présélection. Tous les profils ci-dessous sont fictifs et servent uniquement à présenter l'interface.", 13, muted, false));
+        content.addView(text("Les profils affichés dans cette démonstration sont fictifs. Aucun candidat réel n'est publié ni contacté.", 12, muted, false));
+        space(content, 18);
+        content.addView(button("＋  Créer une offre", true, this::showEmployerDraft),
+                new LinearLayout.LayoutParams(-1, dp(56)));
+        space(content, 6);
+        content.addView(text("Votre brouillon reste uniquement sur cet appareil : il n'est ni publié ni transmis.", 12, muted, false));
         space(content, 16);
 
-        if (candidateSwipeIndex >= demoCandidates.size()) {
-            content.addView(text("Vous avez parcouru tous les profils de démonstration.", 17, ink, true));
+        android.content.SharedPreferences draft = getSharedPreferences("gass_jobs_drafts", MODE_PRIVATE);
+        if (draft.contains("title")) {
+            LinearLayout offer = column();
+            offer.setPadding(dp(18), dp(18), dp(18), dp(18));
+            offer.setBackground(shape(Color.rgb(30, 33, 41), 22));
+            offer.addView(text("APERÇU DE VOTRE OFFRE", 12, gold, true));
+            space(offer, 12);
+            offer.addView(text(draft.getString("title", "Votre poste"), 24, Color.WHITE, true));
+            space(offer, 6);
+            offer.addView(text(draft.getString("company", "Votre entreprise") + " • " + draft.getString("governorate", "Tunisie"), 14, Color.rgb(220, 230, 238), false));
+            space(offer, 10);
+            offer.addView(text(draft.getString("sector", "Secteur") + " • " + draft.getString("contract", "Contrat"), 13, gold, true));
+            space(offer, 8);
+            offer.addView(text(draft.getString("description", ""), 14, Color.WHITE, false));
+            space(offer, 12);
+            offer.addView(text("BROUILLON PRIVÉ • NON PUBLIÉ", 11, gold, true));
+            content.addView(offer);
             space(content, 12);
-            content.addView(button("Recommencer les profils", true, () -> {
-                candidateSwipeIndex = 0;
-                showCandidateDeck();
-            }), new LinearLayout.LayoutParams(-1, 54));
+            content.addView(button("Modifier mon offre", false, this::showEmployerDraft));
         } else {
-            Candidate candidate = demoCandidates.get(candidateSwipeIndex);
-            LinearLayout profileCard = column();
-            profileCard.setBackground(shape(Color.rgb(24, 27, 34), 28));
-            profileCard.setClipToOutline(true);
-
-            LinearLayout hero = column();
-            hero.setGravity(Gravity.CENTER_HORIZONTAL);
-            hero.setPadding(22, 24, 22, 24);
-            hero.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                    new int[] {Color.rgb(52, 65, 78), Color.rgb(30, 39, 51), Color.rgb(13, 17, 24)}));
-            TextView avatar = text(candidate.name.substring(0, 1).toUpperCase(Locale.ROOT), 42, Color.WHITE, true);
-            avatar.setGravity(Gravity.CENTER);
-            avatar.setBackground(shape(Color.rgb(191, 139, 48), 100));
-            hero.addView(avatar, new LinearLayout.LayoutParams(104, 104));
-            space(hero, 16);
-            hero.addView(text("PROFIL DE DÉMONSTRATION • FICTIF", 11, Color.rgb(255, 207, 105), true));
-            space(hero, 10);
-            TextView name = text(candidate.name, 27, Color.WHITE, true);
-            name.setGravity(Gravity.CENTER);
-            hero.addView(name);
-            space(hero, 5);
-            TextView profession = text(candidate.profession, 17, Color.rgb(245, 218, 165), true);
-            profession.setGravity(Gravity.CENTER);
-            hero.addView(profession);
-            space(hero, 8);
-            TextView city = text("⌖  " + candidate.city + " • Tunisie", 14, Color.rgb(224, 232, 240), false);
-            city.setGravity(Gravity.CENTER);
-            hero.addView(city);
-            profileCard.addView(hero);
-
-            LinearLayout details = column();
-            details.setPadding(22, 20, 22, 22);
-            details.setBackgroundColor(Color.rgb(24, 27, 34));
-            details.addView(text("Expérience", 13, muted, true));
-            space(details, 3);
-            details.addView(text(candidate.experience, 19, ink, true));
-            space(details, 12);
-            details.addView(text("Formation", 13, muted, true));
-            space(details, 3);
-            details.addView(text(candidate.education, 16, ink, true));
-            space(details, 12);
-            details.addView(text("Compétences", 13, muted, true));
-            space(details, 5);
-            TextView skills = text(candidate.skills, 15, Color.rgb(225, 229, 236), false);
-            skills.setBackground(shape(Color.rgb(39, 44, 53), 16));
-            skills.setPadding(14, 12, 14, 12);
-            details.addView(skills);
-            space(details, 14);
-            TextView availability = text("●  " + candidate.availability, 13, Color.rgb(255, 207, 105), true);
-            details.addView(availability);
-            space(details, 10);
-            details.addView(text((candidateSwipeIndex + 1) + " / " + demoCandidates.size() + " • Profil fictif, non publiable", 12, muted, false));
-            space(details, 14);
-
-            LinearLayout actions = row();
-            Button pass = button("✕  Passer", false, () -> {
-                candidateSwipeIndex++;
-                showCandidateDeck();
-            });
-            Button shortlist = button("♡  Présélectionner", true, () -> {
-                saveCandidate(candidate);
-                candidateSwipeIndex++;
-                showCandidateDeck();
-            });
-            actions.addView(pass, new LinearLayout.LayoutParams(0, 52, 1));
-            actions.addView(shortlist, new LinearLayout.LayoutParams(0, 52, 1));
-            details.addView(actions);
-            space(details, 8);
-            details.addView(button("Voir le profil", false, () -> new AlertDialog.Builder(this)
-                    .setTitle(candidate.name + " — " + candidate.profession)
-                    .setMessage("Ville : " + candidate.city + "\nExpérience : " + candidate.experience
-                            + "\nFormation : " + candidate.education + "\nCompétences : " + candidate.skills
-                            + "\nDisponibilité : " + candidate.availability
-                            + "\n\nProfil fictif de démonstration. Aucun contact réel n'est associé.")
-                    .setPositiveButton("Fermer", (dialog, which) -> dialog.dismiss()).show()));
-            profileCard.addView(details);
-
-            final float[] downX = {0f};
-            profileCard.setOnTouchListener((view, event) -> {
-                if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                    downX[0] = event.getX();
-                    return true;
-                }
-                if (event.getAction() == MotionEvent.ACTION_UP) {
-                    float delta = event.getX() - downX[0];
-                    if (Math.abs(delta) > 85f) {
-                        view.animate().translationX(delta > 0 ? 520f : -520f).alpha(0.25f).setDuration(160)
-                                .withEndAction(() -> {
-                                    view.setTranslationX(0f);
-                                    view.setAlpha(1f);
-                                    if (delta > 0) saveCandidate(candidate);
-                                    candidateSwipeIndex++;
-                                    showCandidateDeck();
-                                }).start();
-                    } else view.performClick();
-                    return true;
-                }
-                return true;
-            });
-            content.addView(profileCard, new LinearLayout.LayoutParams(-1, -2));
-            space(content, 12);
-            content.addView(text("Glissez à gauche pour passer • à droite pour présélectionner", 12, muted, false));
+            content.addView(text("Votre première annonce apparaîtra ici sous forme de carte. Elle restera privée jusqu'à la mise en place de la publication sécurisée.", 14, muted, false));
         }
-
-        space(content, 18);
-        Set<String> shortlisted = new HashSet<String>(getSharedPreferences("tun_jobs_candidates", MODE_PRIVATE)
-                .getStringSet("keys", new HashSet<String>()));
-        content.addView(text("Profils présélectionnés : " + shortlisted.size(), 14, gold, true));
-        space(content, 8);
-        content.addView(button("Retour à l'espace recruteur", false, this::showHome),
-                new LinearLayout.LayoutParams(-1, 52));
+        space(content, 14);
+        content.addView(button("Voir les sources officielles", false, () -> openExternal(MINISTRY_DIRECTORY)));
     }
 
     private void saveCandidate(Candidate candidate) {
@@ -714,7 +937,7 @@ public class MainActivity extends Activity {
         prepareScreen(false, this::showMenu);
         base("Menu TUN-JOBS", "Accès rapide à votre espace et aux réglages.");
         LinearLayout banner = column();
-        banner.setPadding(20, 22, 20, 22);
+        banner.setPadding(dp(20), dp(22), dp(20), dp(22));
         banner.setBackground(shape(Color.rgb(24, 26, 31), 18));
         banner.addView(text("TUN-JOBS", 25, Color.WHITE, true));
         space(banner, 6);
@@ -723,17 +946,17 @@ public class MainActivity extends Activity {
         banner.addView(text("GASS-OS  •  BY AYMEN GHARSALLI", 13, Color.WHITE, false));
         content.addView(banner);
         space(content, 18);
-        content.addView(button("⌂   Emplois", false, this::showHome), new LinearLayout.LayoutParams(-1, 58));
+        content.addView(button("⌂   Emplois", false, this::showHome), new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 8);
-        content.addView(button("♙   Mon profil", false, this::showProfile), new LinearLayout.LayoutParams(-1, 58));
+        content.addView(button("♙   Mon profil", false, this::showProfile), new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 8);
-        content.addView(button("⚙   Paramètres", false, this::showSettings), new LinearLayout.LayoutParams(-1, 58));
+        content.addView(button("⚙   Paramètres", false, this::showSettings), new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 8);
-        content.addView(button("ⓘ   À propos", false, this::showAboutMe), new LinearLayout.LayoutParams(-1, 58));
+        content.addView(button("ⓘ   À propos", false, this::showAboutMe), new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 8);
-        content.addView(button("Sites officiels de l'emploi", false, this::showOfficialSources), new LinearLayout.LayoutParams(-1, 58));
+        content.addView(button("Sites officiels de l'emploi", false, this::showOfficialSources), new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 8);
-        content.addView(button("Bureaux régionaux", false, this::showEmploymentOffices), new LinearLayout.LayoutParams(-1, 58));
+        content.addView(button("Bureaux régionaux", false, this::showEmploymentOffices), new LinearLayout.LayoutParams(-1, dp(58)));
     }
 
     private void showSettings() {
@@ -751,16 +974,16 @@ public class MainActivity extends Activity {
         content.addView(button("Réafficher l'écran de bienvenue au prochain lancement", false, () -> {
             prefs.edit().putBoolean("welcome_done", false).apply();
             Toast.makeText(this, "L'écran de bienvenue sera affiché au prochain lancement.", Toast.LENGTH_LONG).show();
-        }), new LinearLayout.LayoutParams(-1, 58));
+        }), new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 10);
-        content.addView(button("Retour aux emplois", true, this::showHome), new LinearLayout.LayoutParams(-1, 58));
+        content.addView(button("Retour aux emplois", true, this::showHome), new LinearLayout.LayoutParams(-1, dp(58)));
     }
 
     private void showAboutMe() {
         prepareScreen(false, this::showAboutMe);
         base("À propos", "Qui sommes-nous ?");
         LinearLayout banner = column();
-        banner.setPadding(20, 22, 20, 22);
+        banner.setPadding(dp(20), dp(22), dp(20), dp(22));
         banner.setBackground(shape(Color.rgb(22, 35, 52), 18));
         banner.addView(text("TUN-JOBS", 28, Color.WHITE, true));
         space(banner, 8);
@@ -775,7 +998,7 @@ public class MainActivity extends Activity {
         space(content, 6);
         content.addView(text("Les annonces visibles actuellement sont des exemples fictifs. Les portails publics s'ouvrent directement sur leurs sites officiels. Les comptes, candidatures et publications en ligne nécessitent encore un service sécurisé.", 14, muted, false));
         space(content, 18);
-        content.addView(button("Retour", true, this::showMenu), new LinearLayout.LayoutParams(-1, 58));
+        content.addView(button("Retour", true, this::showMenu), new LinearLayout.LayoutParams(-1, dp(58)));
     }
 
     private void showOfficialSources() {
@@ -797,8 +1020,8 @@ public class MainActivity extends Activity {
 
     private void officeCard(String governorate, String director, String address, String phone, String email) {
         LinearLayout c = column();
-        c.setPadding(18, 18, 18, 18);
-        c.setBackground(shape(Color.WHITE, 18));
+        c.setPadding(dp(18), dp(18), dp(18), dp(18));
+        c.setBackground(shape(panel, 18));
         c.addView(text(governorate, 19, ink, true));
         space(c, 7);
         c.addView(text("Responsable : " + director, 15, green, true));
@@ -812,10 +1035,10 @@ public class MainActivity extends Activity {
         LinearLayout actions = row();
         actions.setGravity(Gravity.CENTER_VERTICAL);
         actions.addView(button("Appeler", true, () -> openExternal("tel:" + phone.replace(" ", ""))),
-                new LinearLayout.LayoutParams(0, 58, 1));
+                new LinearLayout.LayoutParams(0, dp(58), 1));
         if (email != null && !email.isEmpty()) {
             actions.addView(button("E-mail", false, () -> openExternal("mailto:" + email)),
-                    new LinearLayout.LayoutParams(0, 58, 1));
+                    new LinearLayout.LayoutParams(0, dp(58), 1));
         }
         c.addView(actions);
         content.addView(c);
@@ -886,7 +1109,7 @@ public class MainActivity extends Activity {
         field.setGravity(Gravity.CENTER_VERTICAL);
         field.setHint(hint);
         field.setText(value);
-        field.setPadding(16, 6, 16, 6);
+        field.setPadding(dp(16), dp(6), dp(16), dp(6));
         field.setTextColor(ink);
         field.setHintTextColor(muted);
         field.setBackground(shape(panel, 14));
@@ -924,7 +1147,7 @@ public class MainActivity extends Activity {
 
     private void showWelcome() {
         prepareScreen(true, this::showWelcome);
-        base("Bienvenue sur TUN-JOBS", "L'emploi et le recrutement, partout en Tunisie.");
+        base("Bienvenue sur TUN-JOBS", "L'emploi et le recrutement, partout en Tunisie.", -1, true);
         space(content, 26);
         content.addView(text("Votre prochain emploi peut commencer ici.", 27, ink, true));
         space(content, 12);
@@ -934,25 +1157,25 @@ public class MainActivity extends Activity {
             getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
             employerMode = false;
             showHome();
-        }), new LinearLayout.LayoutParams(-1, 60));
+        }), new LinearLayout.LayoutParams(-1, dp(60)));
         space(content, 12);
         content.addView(button("Je propose un emploi", false, () -> {
             getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
             employerMode = true;
             showHome();
-        }), new LinearLayout.LayoutParams(-1, 60));
+        }), new LinearLayout.LayoutParams(-1, dp(60)));
         space(content, 22);
         content.addView(text("TUN-JOBS — Une plateforme tunisienne pour rapprocher candidats et employeurs.", 13, muted, false));
     }
 
     private void showProfile() {
         prepareScreen(true, this::showProfile);
-        base("Votre carte candidat", "Un profil clair pour présenter votre parcours professionnel.");
+        base("Votre carte candidat", "Un profil clair pour présenter votre parcours professionnel.", TAB_PROFILE, true);
 
         android.content.SharedPreferences p = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
         content.addView(text("Aperçu de votre profil", 20, ink, true));
         LinearLayout preview = column();
-        preview.setPadding(18, 18, 18, 18);
+        preview.setPadding(dp(18), dp(18), dp(18), dp(18));
         preview.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 new int[] {Color.rgb(57, 45, 25), Color.rgb(15, 17, 23), Color.rgb(8, 10, 14)}));
         ImageView previewPhoto = new ImageView(this);
@@ -965,7 +1188,7 @@ public class MainActivity extends Activity {
             previewPhoto.setImageResource(android.R.drawable.ic_menu_camera);
             previewPhoto.setColorFilter(Color.WHITE);
         }
-        LinearLayout.LayoutParams previewPhotoParams = new LinearLayout.LayoutParams(104, 104);
+        LinearLayout.LayoutParams previewPhotoParams = new LinearLayout.LayoutParams(dp(104), dp(104));
         previewPhotoParams.gravity = Gravity.CENTER_HORIZONTAL;
         preview.addView(previewPhoto, previewPhotoParams);
         space(preview, 12);
@@ -984,7 +1207,7 @@ public class MainActivity extends Activity {
         ImageView photo = new ImageView(this);
         profilePhotoView = photo;
         photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        photo.setBackground(shape(Color.WHITE, 18));
+        photo.setBackground(shape(panel, 18));
         String photoUri = p.getString("photo_uri", "");
         if (!photoUri.isEmpty()) {
             try { photo.setImageURI(Uri.parse(photoUri)); } catch (Exception ignored) { }
@@ -993,12 +1216,12 @@ public class MainActivity extends Activity {
             photo.setColorFilter(muted);
             photo.setContentDescription("Photo de profil non sélectionnée");
         }
-        LinearLayout.LayoutParams photoParams = new LinearLayout.LayoutParams(112, 112);
+        LinearLayout.LayoutParams photoParams = new LinearLayout.LayoutParams(dp(112), dp(112));
         photoParams.gravity = Gravity.CENTER_HORIZONTAL;
         content.addView(photo, photoParams);
         space(content, 8);
         content.addView(button("Ajouter / modifier ma photo", false, () -> pickProfileFile(PICK_PROFILE_PHOTO, "image/*")),
-                new LinearLayout.LayoutParams(-1, 56));
+                new LinearLayout.LayoutParams(-1, dp(56)));
         space(content, 14);
 
         EditText name = profileField("Nom et prénom", p.getString("name", ""));
@@ -1014,7 +1237,7 @@ public class MainActivity extends Activity {
         for (int i=0;i<fields.length;i++) {
             content.addView(text(labels[i], 14, muted, true));
             space(content, 4);
-            content.addView(fields[i], new LinearLayout.LayoutParams(-1, 64));
+            content.addView(fields[i], new LinearLayout.LayoutParams(-1, dp(64)));
             space(content, 10);
         }
 
@@ -1023,7 +1246,7 @@ public class MainActivity extends Activity {
         content.addView(profileCvLabel);
         space(content, 6);
         content.addView(button("Joindre mon CV (PDF ou document)", false, () -> pickProfileFile(PICK_PROFILE_CV, "application/pdf")),
-                new LinearLayout.LayoutParams(-1, 56));
+                new LinearLayout.LayoutParams(-1, dp(56)));
         space(content, 14);
         content.addView(button("Enregistrer mon profil sur ce téléphone", true, () -> {
             if (name.getText().toString().trim().isEmpty() || phone.getText().toString().trim().isEmpty()) {
@@ -1035,7 +1258,7 @@ public class MainActivity extends Activity {
             for (int i=0;i<fields.length;i++) e.putString(keys[i], fields[i].getText().toString().trim());
             e.putBoolean("profile_saved", true).apply();
             Toast.makeText(this, "Profil enregistré uniquement sur cet appareil.", Toast.LENGTH_LONG).show();
-        }), new LinearLayout.LayoutParams(-1, 60));
+        }), new LinearLayout.LayoutParams(-1, dp(60)));
         space(content, 8);
         content.addView(text("Confidentialité : vos informations, votre photo et votre CV restent sur ce téléphone. Ils ne sont pas envoyés ni publiés. Le partage avec les employeurs sera activé uniquement après mise en place d'un service sécurisé et avec votre accord.", 13, muted, false));
 
@@ -1056,66 +1279,63 @@ public class MainActivity extends Activity {
 
     private void showJob(String title, String company, String location, String description) {
         prepareScreen(false, () -> showJob(title, company, location, description));
-        base(title, company + " • " + location);
+        base(title, company + " • " + location, TAB_OFFERS, true);
         content.addView(text(description, 16, ink, false));
         space(content, 18);
         content.addView(button("Postuler (bientôt)", true, this::showNotice));
         space(content, 10);
-        content.addView(button("Retour aux offres", false, this::showHome));
+        content.addView(button("Retour aux offres", false, this::showOffers));
     }
 
     private EditText draftField(String hint, boolean multiline) {
         EditText field = new EditText(this);
         field.setHint(hint);
-        field.setTextSize(17);
-        field.setMinHeight(multiline ? 132 : 62);
+        field.setTextSize(16);
+        field.setTextColor(ink);
+        field.setHintTextColor(muted);
         field.setSingleLine(!multiline);
         if (multiline) {
             field.setMinLines(4);
             field.setGravity(Gravity.TOP);
+        } else {
+            field.setGravity(Gravity.CENTER_VERTICAL);
         }
-        field.setPadding(18, 15, 18, 15);
-        field.setBackground(shape(Color.WHITE, 14));
+        field.setPadding(dp(16), dp(12), dp(16), dp(12));
+        field.setBackground(shape(panel, 14));
         return field;
     }
 
     private void showEmployerDraft() {
         prepareScreen(false, this::showEmployerDraft);
-        base("Préparer une offre", "Brouillon privé — non publié.");
+        base("Préparer une offre", "Brouillon privé — non publié.", TAB_EMPLOYERS, true);
         content.addView(text("Titre du poste *", 13, muted, true));
         EditText title = draftField("Ex. Technicien de maintenance", false);
-        content.addView(title, new LinearLayout.LayoutParams(-1, 52));
+        content.addView(title, new LinearLayout.LayoutParams(-1, dp(52)));
         space(content, 10);
         content.addView(text("Entreprise *", 13, muted, true));
         EditText company = draftField("Nom de l'entreprise", false);
-        content.addView(company, new LinearLayout.LayoutParams(-1, 52));
+        content.addView(company, new LinearLayout.LayoutParams(-1, dp(52)));
         space(content, 10);
-        content.addView(text("Gouvernorat *", 13, muted, true));
         Spinner region = filterSpinner(new String[] {
                 "Kasserine", "Tunis", "Ariana", "Ben Arous", "Manouba", "Nabeul",
                 "Zaghouan", "Bizerte", "Béja", "Jendouba", "Le Kef", "Siliana",
                 "Kairouan", "Sidi Bouzid", "Sousse", "Monastir", "Mahdia", "Sfax",
                 "Gafsa", "Tozeur", "Kébili", "Gabès", "Médenine", "Tataouine"
         });
-        content.addView(region, new LinearLayout.LayoutParams(-1, 48));
-        space(content, 10);
-        content.addView(text("Secteur", 13, muted, true));
+        addSpinner("Gouvernorat *", region);
         Spinner sector = filterSpinner(new String[] {
                 "Commerce", "Agriculture", "Bâtiment", "Informatique", "Santé", "Transport", "Autre"
         });
-        content.addView(sector, new LinearLayout.LayoutParams(-1, 48));
-        space(content, 10);
-        content.addView(text("Type de contrat", 13, muted, true));
+        addSpinner("Secteur", sector);
         Spinner contract = filterSpinner(new String[] {"CDI", "CDD", "Temps plein", "Temps partiel", "Saisonnier", "Stage"});
-        content.addView(contract, new LinearLayout.LayoutParams(-1, 48));
-        space(content, 10);
+        addSpinner("Type de contrat", contract);
         content.addView(text("Salaire (facultatif)", 13, muted, true));
         EditText salary = draftField("Ex. 900–1200 TND / mois", false);
-        content.addView(salary, new LinearLayout.LayoutParams(-1, 52));
+        content.addView(salary, new LinearLayout.LayoutParams(-1, dp(52)));
         space(content, 10);
         content.addView(text("Description et compétences *", 13, muted, true));
         EditText description = draftField("Missions, expérience, compétences, horaires…", true);
-        content.addView(description, new LinearLayout.LayoutParams(-1, 116));
+        content.addView(description, new LinearLayout.LayoutParams(-1, dp(140)));
         space(content, 14);
         content.addView(text("Ne saisissez pas de données personnelles de candidats ici. Le brouillon est enregistré localement sur ce téléphone. La publication, la vérification de l'employeur et les candidatures seront activées après mise en place d'un backend sécurisé.", 12, muted, false));
         space(content, 14);
@@ -1140,7 +1360,7 @@ public class MainActivity extends Activity {
             Toast.makeText(this, "Brouillon enregistré sur cet appareil. Rien n'a été publié.", Toast.LENGTH_LONG).show();
         }));
         space(content, 10);
-        content.addView(button("Retour", false, this::showHome));
+        content.addView(button("Retour", false, this::showEmployerSpace));
         android.content.SharedPreferences saved = getSharedPreferences("gass_jobs_drafts", MODE_PRIVATE);
         if (saved.contains("title")) {
             space(content, 18);
