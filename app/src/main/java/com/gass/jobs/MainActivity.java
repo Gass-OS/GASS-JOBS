@@ -68,7 +68,12 @@ public class MainActivity extends Activity {
 
     private static class Job {
         final String title, company, location, governorate, sector, contract, description;
+        final String sourceUrl, publishedDate;
         Job(String title, String company, String location, String governorate, String sector, String contract, String description) {
+            this(title, company, location, governorate, sector, contract, description, "", "");
+        }
+        Job(String title, String company, String location, String governorate, String sector, String contract,
+            String description, String sourceUrl, String publishedDate) {
             this.title = title;
             this.company = company;
             this.location = location;
@@ -76,7 +81,10 @@ public class MainActivity extends Activity {
             this.sector = sector;
             this.contract = contract;
             this.description = description;
+            this.sourceUrl = sourceUrl;
+            this.publishedDate = publishedDate;
         }
+        boolean isOfficial() { return sourceUrl != null && !sourceUrl.isEmpty(); }
         String key() { return title + "|" + company + "|" + location; }
     }
 
@@ -123,6 +131,31 @@ public class MainActivity extends Activity {
             "https://www.emploi.gov.tn/fr/93/directions-regionales-de-formation-professionnelle-et-de-lemploi";
     private static final String OPEN_DATA_DIRECTORY =
             "https://catalog.data.gov.tn/fr/dataset/reseau-de-bureaux-de-l-emploi-et-du-travail-independant-en-tunisie";
+    private static final String ANETI_TUNISIA_OFFERS =
+            "https://www.emploi.nat.tn/";
+    private static final String ANETI_INTERNATIONAL_OFFERS =
+            "https://www.aneti-international.tn/index.php/offres";
+
+    // Real vacancies transcribed from ANETI International's public listing on 10 Nov 2026.
+    // Each card opens the original ANETI vacancy page. No end date was displayed on the source pages.
+    private final List<Job> anetiJobs = new ArrayList<Job>() {{
+        add(new Job("Mécanicien d'équipement agricole", "ANETI — Emploi international", "Canada", "International",
+                "Mécanique", "Permanent • Temps plein",
+                "Publié le 03/11/2026. Diagnostic, entretien et réparation de machines agricoles. Profil publié par ANETI : au moins 3 ans d'expérience en mécanique. Salaire annoncé : 26 à 30 CAD/heure selon expérience. CV exigé en anglais. Vérifiez toutes les conditions sur la fiche officielle.",
+                "https://www.aneti-international.tn/node/1071902", "03/11/2026"));
+        add(new Job("Cuisinier", "ANETI — Emploi international", "France", "International",
+                "Hôtellerie • Restauration", "Saisonnier",
+                "Publié le 03/11/2026. Préparation des repas, organisation du travail, hygiène et sécurité alimentaire, gestion des matières premières et travail en équipe. Formation professionnelle en cuisine ou diplôme équivalent souhaité. Consultez la fiche ANETI pour les conditions complètes.",
+                "https://www.aneti-international.tn/node/1071991", "03/11/2026"));
+        add(new Job("Lingère", "ANETI — Emploi international", "France", "International",
+                "Hôtellerie • Restauration", "Saisonnier",
+                "Publié le 22/10/2026. Lavage, séchage, repassage et réparation du linge. La fiche ANETI demande rigueur, organisation, esprit d'équipe et au moins 2 ans d'expérience dans l'hôtellerie, la restauration ou un secteur similaire. CV en français.",
+                "https://www.aneti-international.tn/node/1064795", "22/10/2026"));
+        add(new Job("Femme de ménage", "ANETI — Emploi international", "France", "International",
+                "Hôtellerie • Services", "À vérifier sur l'annonce",
+                "Publié le 22/10/2026. Offre publiée dans la liste officielle ANETI International. Ouvrez la fiche source pour consulter les missions, le profil recherché et les modalités de candidature.",
+                "https://www.aneti-international.tn/node/1064776", "22/10/2026"));
+    }};
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -563,8 +596,10 @@ public class MainActivity extends Activity {
     }
 
     private View jobCard(Job job, int index, int total) {
-        return deckCard(palette(job.sector), "● Annonce de démonstration", job.location, sectorGlyph(job.sector),
-                job.title, "🏢  " + job.company, "📍  " + job.location + " • " + job.governorate,
+        String badge = job.isOfficial() ? "✓ ANETI • OFFRE OFFICIELLE" : "● Annonce de démonstration";
+        String dateLine = job.publishedDate.isEmpty() ? "" : " • Publié le " + job.publishedDate;
+        return deckCard(palette(job.sector), badge, job.location, sectorGlyph(job.sector),
+                job.title, "🏢  " + job.company, "📍  " + job.location + dateLine,
                 job.description, new String[] {job.sector, job.contract}, (index + 1) + "/" + total);
     }
 
@@ -662,7 +697,7 @@ public class MainActivity extends Activity {
         box.addView(icon);
         space(box, 8);
         TextView msg = text(candidates ? "Vous avez parcouru tous les profils de démonstration."
-                : "Vous avez parcouru toutes les offres de démonstration.", 18, ink, true);
+                : "Vous avez parcouru toutes les offres ANETI chargées.", 18, ink, true);
         msg.setGravity(Gravity.CENTER);
         box.addView(msg);
         space(box, 18);
@@ -670,6 +705,14 @@ public class MainActivity extends Activity {
             if (candidates) candidateSwipeIndex = 0; else swipeIndex = 0;
             renderDeck();
         }), new LinearLayout.LayoutParams(-1, dp(52)));
+        if (!candidates) {
+            space(box, 10);
+            box.addView(button("Voir les offres ANETI en Tunisie", false,
+                    () -> openExternal(ANETI_TUNISIA_OFFERS)), new LinearLayout.LayoutParams(-1, dp(50)));
+            space(box, 6);
+            box.addView(button("Toutes les offres ANETI International", false,
+                    () -> openExternal(ANETI_INTERNATIONAL_OFFERS)), new LinearLayout.LayoutParams(-1, dp(50)));
+        }
         return box;
     }
 
@@ -688,7 +731,7 @@ public class MainActivity extends Activity {
         deckHolder.removeAllViews();
         actionBar.removeAllViews();
         final boolean candidates = employerMode;
-        final int total = candidates ? demoCandidates.size() : demoJobs.size();
+        final int total = candidates ? demoCandidates.size() : anetiJobs.size();
         final int index = candidates ? candidateSwipeIndex : swipeIndex;
         if (index >= total) {
             deckHolder.addView(emptyDeck(candidates), new FrameLayout.LayoutParams(-1, -1));
@@ -701,7 +744,7 @@ public class MainActivity extends Activity {
             behindParams.setMargins(dp(16), dp(16), dp(16), 0);
             deckHolder.addView(behind, behindParams);
         }
-        final Job job = candidates ? null : demoJobs.get(index);
+        final Job job = candidates ? null : anetiJobs.get(index);
         final Candidate person = candidates ? demoCandidates.get(index) : null;
         final View card = candidates ? candidateCard(person, index, total) : jobCard(job, index, total);
         final TextView like = likeStamp;
@@ -720,6 +763,7 @@ public class MainActivity extends Activity {
         };
         final Runnable details = () -> {
             if (candidates) showCandidateDialog(person);
+            else if (job.isOfficial()) showOfficialJob(job);
             else showJob(job.title, job.company, job.location, job.description);
         };
         attachSwipe(card, like, nope, nextCard, saveThenNext, details);
@@ -740,6 +784,8 @@ public class MainActivity extends Activity {
         addAction("♥", "Contacter", Color.rgb(30, 170, 95), 58, () -> {
             if (candidates) {
                 Toast.makeText(this, "Profil fictif : le contact sera disponible avec un compte sécurisé.", Toast.LENGTH_LONG).show();
+            } else if (job.isOfficial()) {
+                openExternal(job.sourceUrl);
             } else {
                 showNotice();
             }
@@ -748,7 +794,8 @@ public class MainActivity extends Activity {
             String message = candidates
                     ? "Découvrez TUN-JOBS, l'application emploi et recrutement en Tunisie."
                     : job.title + " — " + job.company + ", " + job.location
-                      + " (annonce de démonstration) • via TUN-JOBS";
+                      + (job.isOfficial() ? " • Offre publiée par ANETI : " + job.sourceUrl
+                                          : " (annonce de démonstration)");
             Intent send = new Intent(Intent.ACTION_SEND);
             send.setType("text/plain");
             send.putExtra(Intent.EXTRA_TEXT, message);
@@ -1013,7 +1060,7 @@ public class MainActivity extends Activity {
         space(content, 6);
         content.addView(text("Transparence et fiabilité", 18, ink, true));
         space(content, 6);
-        content.addView(text("GASS-JOBS ne prétend pas disposer d'une API ANETI ni d'un flux RSS public vérifié. Pour éviter les annonces périmées ou non autorisées, cette version ouvre les portails d'origine. Une intégration automatique sera ajoutée uniquement après confirmation des conditions de réutilisation ou accord du fournisseur.", 13, muted, false));
+        content.addView(text("Les cartes ANETI International du carrousel reprennent les informations visibles sur les fiches publiques consultées le 10 novembre 2026 et renvoient vers chaque annonce originale. Les offres nationales restent consultables sur le portail ANETI Tunisie. Aucun flux/API public ni droit de republication automatique n'est présumé : la synchronisation nationale sera activée après vérification technique et autorisation de réutilisation.", 13, muted, false));
         space(content, 10);
         content.addView(button("Voir les bureaux régionaux", true, this::showEmploymentOffices));
     }
@@ -1275,6 +1322,28 @@ public class MainActivity extends Activity {
             }
         }
         if (savedCount == 0) content.addView(text("Aucune offre sauvegardée pour le moment.", 14, muted, false));
+    }
+
+    private void showOfficialJob(Job job) {
+        prepareScreen(false, () -> showOfficialJob(job));
+        base(job.title, "ANETI • " + job.location, TAB_OFFERS, true);
+        content.addView(chip("✓ OFFRE PUBLIÉE PAR ANETI", true));
+        space(content, 10);
+        content.addView(text("Date de publication : " + job.publishedDate, 14, gold, true));
+        space(content, 10);
+        content.addView(text(job.description, 16, ink, false));
+        space(content, 14);
+        content.addView(text("Source : ANETI International. La date limite n'était pas indiquée dans la fiche consultée. Vérifiez que l'offre est toujours ouverte avant de préparer votre candidature.", 13, muted, false));
+        space(content, 14);
+        content.addView(button("Ouvrir l'annonce originale ANETI", true, () -> openExternal(job.sourceUrl)));
+        space(content, 10);
+        content.addView(button("Voir toutes les offres ANETI International", false,
+                () -> openExternal(ANETI_INTERNATIONAL_OFFERS)));
+        space(content, 10);
+        content.addView(button("Voir les offres ANETI en Tunisie", false,
+                () -> openExternal(ANETI_TUNISIA_OFFERS)));
+        space(content, 10);
+        content.addView(button("Retour aux cartes", false, this::showHome));
     }
 
     private void showJob(String title, String company, String location, String description) {
