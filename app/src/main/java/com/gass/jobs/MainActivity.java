@@ -149,15 +149,16 @@ public class MainActivity extends Activity {
         Button b = new Button(this);
         b.setText(label);
         b.setAllCaps(false);
-        b.setTextSize(15);
-        b.setMinHeight(76);
-        b.setMinimumHeight(76);
-        b.setMaxLines(3);
+        b.setTextSize(14);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setMaxLines(2);
         b.setSingleLine(false);
+        b.setIncludeFontPadding(false);
         b.setGravity(Gravity.CENTER);
         b.setTextColor(primary ? Color.WHITE : ink);
         b.setBackground(shape(primary ? green : Color.rgb(232, 238, 242), 24));
-        b.setPadding(14, 8, 14, 8);
+        b.setPadding(8, 3, 8, 3);
         b.setOnClickListener(v -> action.run());
         return b;
     }
@@ -182,37 +183,51 @@ public class MainActivity extends Activity {
 
         root = column();
         root.setBackgroundColor(canvas);
+        root.setClipToPadding(false);
         setContentView(root);
+        // Android 15+ draws edge-to-edge by default for targetSdk 35.
+        // Reserve the status/navigation bar areas so the header and bottom tabs
+        // remain fully visible on gesture-navigation and cutout devices.
+        getWindow().setStatusBarColor(Color.WHITE);
+        getWindow().setNavigationBarColor(Color.WHITE);
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            view.setPadding(0, insets.getSystemWindowInsetTop(), 0, insets.getSystemWindowInsetBottom());
+            return insets;
+        });
 
         LinearLayout header = column();
-        header.setPadding(22, 16, 22, 18);
+        header.setPadding(16, 8, 16, 12);
         header.setBackgroundColor(Color.WHITE);
         LinearLayout brandRow = row();
         Button menuButton = button("⋮", false, this::showMenu);
         menuButton.setTextSize(30);
         menuButton.setContentDescription("Open navigation menu");
-        menuButton.setMinHeight(72);
-        menuButton.setMinimumHeight(72);
-        brandRow.addView(menuButton, new LinearLayout.LayoutParams(80, 72));
-        TextView brand = text("TUN-JOBS", 17, green, true);
-        LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(0, 48, 1);
+        menuButton.setMinHeight(48);
+        menuButton.setMinimumHeight(48);
+        brandRow.addView(menuButton, new LinearLayout.LayoutParams(56, 52));
+        TextView brand = text("TUN-JOBS", 18, green, true);
+        LinearLayout.LayoutParams brandParams = new LinearLayout.LayoutParams(0, 52, 1);
         brandParams.leftMargin = 10;
         brandRow.addView(brand, brandParams);
         header.addView(brandRow);
-        space(header, 8);
-        header.addView(text(title, 25, ink, true));
+        space(header, 4);
+        header.addView(text(title, 23, ink, true));
         header.addView(text(subtitle, 14, muted, false));
         root.addView(header);
 
         ScrollView scroll = new ScrollView(this);
         content = column();
         content.setPadding(18, 18, 18, 24);
+        scroll.setFillViewport(true);
+        scroll.setClipToPadding(false);
         scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
         LinearLayout nav = row();
         nav.setBackgroundColor(Color.WHITE);
-        nav.setPadding(5, 8, 5, 8);
+        nav.setPadding(4, 3, 4, 3);
         nav.addView(button("Emplois", false, this::showHome), new LinearLayout.LayoutParams(0, 48, 1));
         nav.addView(button("Sources", false, this::showOfficialSources), new LinearLayout.LayoutParams(0, 48, 1));
         nav.addView(button("Bureaux", false, this::showEmploymentOffices), new LinearLayout.LayoutParams(0, 48, 1));
@@ -234,7 +249,7 @@ public class MainActivity extends Activity {
         space(c, 12);
         LinearLayout actions = row();
         actions.addView(button("Voir l'offre", true, () -> showJob(job.title, job.company, job.location, job.description)),
-                new LinearLayout.LayoutParams(0, 56, 1));
+                new LinearLayout.LayoutParams(0, 48, 1));
         Set<String> saved = new HashSet<String>(getSharedPreferences("gass_jobs_saved", MODE_PRIVATE)
                 .getStringSet("keys", new HashSet<String>()));
         boolean isSaved = saved.contains(job.key());
@@ -321,9 +336,9 @@ public class MainActivity extends Activity {
         base("Trouvez votre prochain emploi", "Les opportunités près de chez vous, en Tunisie.");
         LinearLayout switcher = row();
         switcher.addView(button("Chercher un emploi", !employerMode, () -> { employerMode = false; showHome(); }),
-                new LinearLayout.LayoutParams(0, 48, 1));
+                new LinearLayout.LayoutParams(0, 44, 1));
         switcher.addView(button("Recruter", employerMode, () -> { employerMode = true; showHome(); }),
-                new LinearLayout.LayoutParams(0, 48, 1));
+                new LinearLayout.LayoutParams(0, 44, 1));
         content.addView(switcher);
         space(content, 12);
         content.addView(button("Trouver un bureau de l'emploi", false, this::showEmploymentOffices));
@@ -360,33 +375,33 @@ public class MainActivity extends Activity {
                 "Sidi Bouzid", "Sousse", "Monastir", "Mahdia", "Sfax", "Gafsa", "Tozeur",
                 "Kébili", "Gabès", "Médenine", "Tataouine"
         });
-        content.addView(governorateFilter, new LinearLayout.LayoutParams(-1, 48));
+        content.addView(governorateFilter, new LinearLayout.LayoutParams(-1, 44));
         space(content, 6);
 
         content.addView(text("Secteur", 13, muted, true));
         sectorFilter = filterSpinner(new String[] {
                 "Tous", "Agriculture", "Bâtiment", "Commerce", "Informatique", "Santé", "Transport"
         });
-        content.addView(sectorFilter, new LinearLayout.LayoutParams(-1, 48));
+        content.addView(sectorFilter, new LinearLayout.LayoutParams(-1, 44));
         space(content, 6);
 
         content.addView(text("Type de contrat", 13, muted, true));
         contractFilter = filterSpinner(new String[] {
                 "Tous", "CDI", "CDD", "Temps plein", "Saisonnier"
         });
-        content.addView(contractFilter, new LinearLayout.LayoutParams(-1, 48));
+        content.addView(contractFilter, new LinearLayout.LayoutParams(-1, 44));
         space(content, 12);
 
         LinearLayout filterActions = row();
         filterActions.addView(button("Rechercher", true, this::renderJobs),
-                new LinearLayout.LayoutParams(0, 48, 1));
+                new LinearLayout.LayoutParams(0, 44, 1));
         filterActions.addView(button("Effacer", false, () -> {
             searchInput.setText("");
             governorateFilter.setSelection(0);
             sectorFilter.setSelection(0);
             contractFilter.setSelection(0);
             renderJobs();
-        }), new LinearLayout.LayoutParams(0, 48, 1));
+        }), new LinearLayout.LayoutParams(0, 44, 1));
         content.addView(filterActions);
         space(content, 18);
         resultsContainer = column();
