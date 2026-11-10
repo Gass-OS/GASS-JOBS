@@ -30,13 +30,11 @@ final class SupabaseProfile {
             card.put("skills", skills);
             card.put("availability", availability);
             card.put("discoverable", true);
-            card.put("updated_at", java.time.Instant.now().toString());
             request("/rest/v1/candidate_cards?on_conflict=user_id", token, card);
 
             JSONObject privateDetails = new JSONObject();
             privateDetails.put("user_id", userId);
             privateDetails.put("phone", phone);
-            privateDetails.put("updated_at", java.time.Instant.now().toString());
             request("/rest/v1/candidate_private?on_conflict=user_id", token, privateDetails);
             return new Result(true, "Vos informations professionnelles sont maintenant synchronisées avec votre compte. Le téléphone reste dans la table privée, protégé par les règles d'accès Supabase. La photo et le CV ne sont pas encore envoyés.");
         } catch (Exception e) {
