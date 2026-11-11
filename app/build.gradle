@@ -14,7 +14,7 @@ android {
         versionName '0.2.0'
     }
 
-    compileOptions {
+    buildFeatures {\n        buildConfig true\n    }\n\n    dependencies {\n        implementation 'io.github.webrtc-sdk:android:150.7871.04'\n    }\n\n    compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
