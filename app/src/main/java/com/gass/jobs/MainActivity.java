@@ -1544,6 +1544,17 @@ public class MainActivity extends Activity {
                 new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 14);
 
+        sectionTitle("Radio & télévision");
+        content.addView(button("📻  Radio en ligne", false, () ->
+                startActivity(new Intent(this, RadioActivity.class))),
+                new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 8);
+        content.addView(button("📺  Télévision en direct", false, () ->
+                startActivity(new Intent(this, TvActivity.class))),
+                new LinearLayout.LayoutParams(-1, dp(58)));
+        content.addView(text("Stations radio et chaînes TV publiques en streaming. La disponibilité dépend des diffuseurs et de votre connexion.", 12, muted, false));
+        space(content, 14);
+
         sectionTitle("Cartes et aide");
         switchRow("Aide par appui long", "Maintenez un bouton ou une carte pour afficher son explication.", "help_long_press", true);
         switchRow("Astuces sur l'accueil", "Affiche un petit conseil au-dessus des cartes.", "tips", true);
