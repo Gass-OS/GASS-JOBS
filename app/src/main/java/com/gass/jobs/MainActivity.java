@@ -87,6 +87,8 @@ public class MainActivity extends Activity {
     private int swipeIndex = 0;
     private int candidateSwipeIndex = 0;
     private final ArrayList<Job> visibleJobs = new ArrayList<Job>();
+    private final ArrayList<Job> publishedJobs = new ArrayList<Job>();
+    private boolean publishedJobsLoading = false;
 
     private static final int TAB_HOME = 0, TAB_OFFERS = 1, TAB_PROFILE = 2, TAB_EMPLOYERS = 3, TAB_MORE = 4;
     private FrameLayout deckHolder;
@@ -103,25 +105,24 @@ public class MainActivity extends Activity {
     private static final String PREFS_AUTH = "tun_jobs_auth";
 
     private static class Job {
-        final String title, company, location, governorate, sector, contract, description;
-        final String sourceUrl, publishedDate;
+        final String id, ownerId, title, company, location, governorate, sector, contract, description;
+        final String sourceUrl, publishedDate, salary;
         Job(String title, String company, String location, String governorate, String sector, String contract, String description) {
-            this(title, company, location, governorate, sector, contract, description, "", "");
+            this("", "", title, company, location, governorate, sector, contract, description, "", "", "");
         }
         Job(String title, String company, String location, String governorate, String sector, String contract,
             String description, String sourceUrl, String publishedDate) {
-            this.title = title;
-            this.company = company;
-            this.location = location;
-            this.governorate = governorate;
-            this.sector = sector;
-            this.contract = contract;
-            this.description = description;
-            this.sourceUrl = sourceUrl;
-            this.publishedDate = publishedDate;
+            this("", "", title, company, location, governorate, sector, contract, description, sourceUrl, publishedDate, "");
+        }
+        Job(String id, String ownerId, String title, String company, String location, String governorate,
+            String sector, String contract, String description, String sourceUrl, String publishedDate, String salary) {
+            this.id=id; this.ownerId=ownerId; this.title=title; this.company=company; this.location=location;
+            this.governorate=governorate; this.sector=sector; this.contract=contract; this.description=description;
+            this.sourceUrl=sourceUrl; this.publishedDate=publishedDate; this.salary=salary;
         }
         boolean isOfficial() { return sourceUrl != null && !sourceUrl.isEmpty(); }
-        String key() { return title + "|" + company + "|" + location; }
+        boolean isPublishedEmployerOffer() { return id != null && !id.isEmpty(); }
+        String key() { return (isPublishedEmployerOffer()?id:title + "|" + company + "|" + location); }
     }
 
     private static class Candidate {
@@ -703,10 +704,12 @@ public class MainActivity extends Activity {
     }
 
     private View jobCard(Job job, int index, int total) {
-        String badge = job.isOfficial() ? "✓ ANETI • OFFRE OFFICIELLE" : "● Annonce de démonstration";
+        String badge = job.isPublishedEmployerOffer() ? "✓ OFFRE EMPLOYEUR PUBLIÉE"
+                : (job.isOfficial() ? "✓ ANETI • OFFRE OFFICIELLE" : "● Annonce de démonstration");
         String dateLine = job.publishedDate.isEmpty() ? "" : " • Publié le " + job.publishedDate;
         return deckCard(palette(job.sector), badge, job.location, sectorGlyph(job.sector),
-                job.title, "🏢  " + job.company, "📍  " + job.location + dateLine,
+                job.title, "🏢  " + job.company, "📍  " + job.location + dateLine
+                        + (job.salary.isEmpty() ? "" : " • " + job.salary),
                 job.description, new String[] {job.sector, job.contract}, (index + 1) + "/" + total, null);
     }
 
@@ -880,16 +883,17 @@ public class MainActivity extends Activity {
         // fictional candidate profiles using the eight supplied portrait photos.
         // Recruiters retain their independent full candidate deck.
         final boolean recruiterDeck = employerMode;
-        final int total = recruiterDeck ? demoCandidates.size() : anetiJobs.size() + demoCandidates.size();
+        final int total = recruiterDeck ? demoCandidates.size() : publishedJobs.size() + anetiJobs.size() + demoCandidates.size();
         final int index = recruiterDeck ? candidateSwipeIndex : swipeIndex;
         if (index >= total) {
             deckHolder.addView(emptyDeck(recruiterDeck), new FrameLayout.LayoutParams(-1, -1));
             return;
         }
 
-        final boolean demoProfile = recruiterDeck || index >= anetiJobs.size();
-        final int candidateIndex = recruiterDeck ? index : index - anetiJobs.size();
-        final Job job = demoProfile ? null : anetiJobs.get(index);
+        final boolean demoProfile = recruiterDeck || index >= publishedJobs.size() + anetiJobs.size();
+        final int candidateIndex = recruiterDeck ? index : index - publishedJobs.size() - anetiJobs.size();
+        final Job job = demoProfile ? null : (index < publishedJobs.size()
+                ? publishedJobs.get(index) : anetiJobs.get(index - publishedJobs.size()));
         final Candidate person = demoProfile ? demoCandidates.get(candidateIndex) : null;
 
         if (index + 1 < total) {
@@ -1002,10 +1006,39 @@ public class MainActivity extends Activity {
         actionBar.setPadding(0, dp(2), 0, dp(2));
         content.addView(actionBar, new LinearLayout.LayoutParams(-1, -2));
         renderDeck();
+        if (!employerMode) loadPublishedJobs();
+    }
+
+    private void loadPublishedJobs() {
+        if (publishedJobsLoading || !hasAuthSession()) return;
+        publishedJobsLoading = true;
+        new Thread(() -> {
+            try {
+                JSONArray rows = rows("job_offers?select=id,owner_id,title,company,governorate,sector,contract,salary,description,created_at&status=eq.published&order=created_at.desc&limit=100");
+                ArrayList<Job> loaded = new ArrayList<>();
+                for (int i=0;i<rows.length();i++) {
+                    JSONObject o=rows.getJSONObject(i);
+                    String gov=o.optString("governorate","");
+                    loaded.add(new Job(o.optString("id",""),o.optString("owner_id",""),
+                        o.optString("title",""),o.optString("company",""),gov,gov,
+                        o.optString("sector",""),o.optString("contract",""),
+                        o.optString("description",""),"","",o.optString("salary","")));
+                }
+                runOnUiThread(() -> {
+                    publishedJobs.clear(); publishedJobs.addAll(loaded);
+                    publishedJobsLoading=false;
+                    if (!employerMode && deckHolder!=null) renderDeck();
+                });
+            } catch(Exception e) {
+                publishedJobsLoading=false;
+                String msg=e.getMessage()==null?"Erreur réseau":e.getMessage();
+                runOnUiThread(() -> Toast.makeText(this,"Offres employeurs indisponibles : "+msg,Toast.LENGTH_LONG).show());
+            }
+        }).start();
     }
 
     private void showCandidateDeck() {
-        chooseEmployerMode();
+        loadRealCandidates();
     }
 
     private void renderJobs() {
@@ -1016,6 +1049,14 @@ public class MainActivity extends Activity {
         String sector = selected(sectorFilter);
         String contract = selected(contractFilter);
         visibleJobs.clear();
+        for (Job job : publishedJobs) {
+            String searchable=(job.title+" "+job.company+" "+job.location+" "+job.sector+" "+job.contract+" "+job.description).toLowerCase(Locale.ROOT);
+            if (!query.isEmpty() && !searchable.contains(query)) continue;
+            if (!"Tous".equals(governorate) && !job.governorate.equalsIgnoreCase(governorate)) continue;
+            if (!"Tous".equals(sector) && !job.sector.equalsIgnoreCase(sector)) continue;
+            if (!"Tous".equals(contract) && !job.contract.equalsIgnoreCase(contract)) continue;
+            visibleJobs.add(job);
+        }
         for (Job job : demoJobs) {
             String searchable = (job.title + " " + job.company + " " + job.location + " " + job.governorate + " "
                     + job.sector + " " + job.contract + " " + job.description).toLowerCase(Locale.ROOT);
@@ -1027,7 +1068,7 @@ public class MainActivity extends Activity {
         }
         resultsContainer.addView(text(visibleJobs.size() + " offre(s) trouvée(s)", 17, gold, true));
         space(resultsContainer, 2);
-        resultsContainer.addView(text("Les annonces de démonstration sont fictives.", 12, muted, false));
+        resultsContainer.addView(text(publishedJobs.size()+" offre(s) publiée(s) par les employeurs • annonces de démonstration clairement séparées.", 12, muted, false));
         space(resultsContainer, 10);
         if (visibleJobs.isEmpty()) {
             resultsContainer.addView(text("Aucune offre ne correspond à ces filtres.", 15, muted, false));
@@ -1112,7 +1153,7 @@ public class MainActivity extends Activity {
         prepareScreen(true, this::showEmployerSpace);
         base("Espace recruteur", "Préparez vos offres et découvrez des profils.", TAB_EMPLOYERS, true);
         addEmployerSummary();
-        content.addView(text("Découvrez des profils candidats sous forme de cartes, puis préparez vos offres d'emploi.", 14, muted, false));
+        content.addView(text("Les employeurs publient leurs offres pour les candidats. Vous pouvez découvrir les vrais profils qui ont activé leur visibilité.", 14, muted, false));
         space(content, 14);
         content.addView(explain(button("♥  Découvrir les candidats", true, this::showCandidateDeck),
                 "Découvrir les candidats", "Les cartes de démonstration restent disponibles. Le bouton dédié ouvre séparément les vrais profils qui ont accepté d’être visibles."),
@@ -1125,10 +1166,10 @@ public class MainActivity extends Activity {
         content.addView(button("♥ Mes matches et conversations",false,this::loadMyMatches),new LinearLayout.LayoutParams(-1,dp(50)));
         space(content, 18);
         content.addView(explain(button("＋  Créer une offre", true, this::showEmployerDraft),
-                "Créer une offre", "Prépare une offre d'emploi. Le brouillon reste sur ce téléphone : rien n'est publié tant que la publication sécurisée n'existe pas."),
+                "Créer une offre", "Enregistrez un brouillon privé ou publiez une offre visible par les chercheurs d'emploi connectés."),
                 new LinearLayout.LayoutParams(-1, dp(56)));
         space(content, 6);
-        content.addView(text("Votre brouillon reste uniquement sur cet appareil : il n'est ni publié ni transmis.", 12, muted, false));
+        content.addView(text("Les offres publiées apparaissent dans le flux des chercheurs d'emploi. Les brouillons restent privés.", 12, muted, false));
         space(content, 16);
 
         android.content.SharedPreferences draft = getSharedPreferences("gass_jobs_drafts", MODE_PRIVATE);
@@ -1966,6 +2007,32 @@ public class MainActivity extends Activity {
         space(content, 14);
         content.addView(text("Ne saisissez pas de données personnelles de candidats ici. Le brouillon est enregistré localement sur ce téléphone. La publication, la vérification de l'employeur et les candidatures seront activées après mise en place d'un backend sécurisé.", 12, muted, false));
         space(content, 14);
+        content.addView(button("Publier l'offre pour les chercheurs d'emploi", true, () -> {
+            String jobTitle=title.getText().toString().trim();
+            String employer=company.getText().toString().trim();
+            String details=description.getText().toString().trim();
+            if(jobTitle.isEmpty()||employer.isEmpty()||details.isEmpty()) {
+                Toast.makeText(this,"Complétez les champs obligatoires (*).",Toast.LENGTH_LONG).show(); return;
+            }
+            new Thread(() -> {
+                try {
+                    JSONObject offer=new JSONObject();
+                    offer.put("owner_id",me()); offer.put("title",jobTitle); offer.put("company",employer);
+                    offer.put("governorate",selected(region)); offer.put("sector",selected(sector));
+                    offer.put("contract",selected(contract)); offer.put("salary",salary.getText().toString().trim());
+                    offer.put("description",details); offer.put("status","published");
+                    rest("POST","job_offers",offer);
+                    runOnUiThread(() -> {
+                        Toast.makeText(this,"Offre publiée. Elle est maintenant visible aux chercheurs d'emploi.",Toast.LENGTH_LONG).show();
+                        publishedJobsLoading=false; loadPublishedJobs(); showEmployerSpace();
+                    });
+                } catch(Exception e) {
+                    String msg=e.getMessage()==null?"Erreur de publication":e.getMessage();
+                    runOnUiThread(() -> Toast.makeText(this,"Publication impossible : "+msg,Toast.LENGTH_LONG).show());
+                }
+            }).start();
+        }));
+        space(content, 8);
         content.addView(button("Enregistrer le brouillon sur ce téléphone", true, () -> {
             String jobTitle = title.getText().toString().trim();
             String employer = company.getText().toString().trim();
@@ -2793,6 +2860,11 @@ public class MainActivity extends Activity {
                 password.setError("Le mot de passe doit contenir au moins 6 caractères.");
                 return;
             }
+            if (authSignupMode && emailCooldownRemaining(emailValue) > 0) {
+                long seconds=emailCooldownRemaining(emailValue)/1000L;
+                Toast.makeText(this,"Patientez "+seconds+" seconde(s) avant une nouvelle demande d'e-mail.",Toast.LENGTH_LONG).show();
+                return;
+            }
             if (authSignupMode && (nameValue.isEmpty() || !passwordValue.equals(confirm.getText().toString()))) {
                 if (nameValue.isEmpty()) name.setError("Indiquez votre nom.");
                 else confirm.setError("Les mots de passe ne correspondent pas.");
@@ -2809,8 +2881,16 @@ public class MainActivity extends Activity {
                 new LinearLayout.LayoutParams(-1, dp(48)));
     }
 
+    private long emailCooldownRemaining(String email) {
+        long last=getSharedPreferences("tun_jobs_email_limits",MODE_PRIVATE)
+                .getLong("signup_"+email.trim().toLowerCase(Locale.ROOT),0L);
+        return Math.max(0L,60000L-(System.currentTimeMillis()-last));
+    }
+
     private void runAuthRequest(final boolean signup, final String name, final String email, final String password) {
         final String endpoint = signup ? "signup" : "token?grant_type=password";
+        if(signup) getSharedPreferences("tun_jobs_email_limits",MODE_PRIVATE).edit()
+                .putLong("signup_"+email.trim().toLowerCase(Locale.ROOT),System.currentTimeMillis()).apply();
         Toast.makeText(this, signup ? "Création du compte…" : "Connexion…", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
