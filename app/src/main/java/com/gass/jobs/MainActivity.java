@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.media.MediaPlayer;
 import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -64,6 +65,7 @@ import org.json.JSONObject;
 import org.json.JSONArray;
 
 public class MainActivity extends Activity {
+    private MediaPlayer loginIntroPlayer;
     private final int ink = Color.rgb(245, 246, 250);
     private final int muted = Color.rgb(171, 178, 190);
     private final int green = Color.rgb(245, 178, 35);
@@ -1525,6 +1527,33 @@ public class MainActivity extends Activity {
         menuCard("📍", "Bureaux régionaux", "Bureaux de l'emploi en Tunisie", this::showEmploymentOffices);
         menuCard("⇥", "Se déconnecter", "Fermer cette session sur cet appareil", () -> confirmAction("Se déconnecter ?", "Votre session sera fermée sur cet appareil. Vos données locales seront conservées.", "Déconnexion", this::logout));
     }
+    private View mediaSettingCard(String logoText, String titleText, String subtitleText, Runnable action) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(13), dp(12), dp(13), dp(12));
+        card.setBackground(shape(panel, 16));
+
+        TextView logo = text(logoText, 27, gold, true);
+        logo.setGravity(Gravity.CENTER);
+        logo.setBackground(shape(Color.rgb(48, 39, 22), 14));
+        card.addView(logo, new LinearLayout.LayoutParams(dp(58), dp(58)));
+
+        LinearLayout labels = column();
+        labels.setPadding(dp(13), 0, 0, 0);
+        labels.addView(text(titleText, 16, ink, true));
+        space(labels, 4);
+        labels.addView(text(subtitleText, 12, muted, false));
+        card.addView(labels, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView arrow = text("›", 27, gold, true);
+        arrow.setGravity(Gravity.CENTER);
+        card.addView(arrow, new LinearLayout.LayoutParams(dp(26), -1));
+        card.setClickable(true);
+        card.setFocusable(true);
+        card.setOnClickListener(v -> action.run());
+        return card;
+    }
+
     private void showSettings() {
         prepareScreen(false, this::showSettings);
         base("Paramètres", "Personnalisez TUN-JOBS sur cet appareil.");
@@ -1545,14 +1574,12 @@ public class MainActivity extends Activity {
         space(content, 14);
 
         sectionTitle("Radio & télévision");
-        content.addView(button("📻  Radio en ligne", false, () ->
-                startActivity(new Intent(this, RadioActivity.class))),
-                new LinearLayout.LayoutParams(-1, dp(58)));
-        space(content, 8);
-        content.addView(button("📺  Télévision en direct", false, () ->
-                startActivity(new Intent(this, TvActivity.class))),
-                new LinearLayout.LayoutParams(-1, dp(58)));
-        content.addView(text("Stations radio et chaînes TV publiques en streaming. La disponibilité dépend des diffuseurs et de votre connexion.", 12, muted, false));
+        content.addView(mediaSettingCard("📻", "Radio en ligne", "Stations en direct • Tunisie, Europe et monde",
+                () -> startActivity(new Intent(this, RadioActivity.class))));
+        space(content, 9);
+        content.addView(mediaSettingCard("📺", "Télévision en direct", "Chaînes publiques • pays et catégories",
+                () -> startActivity(new Intent(this, TvActivity.class))));
+        content.addView(text("Lecture intégrée avec le lecteur multimédia Android. Certains flux peuvent être indisponibles selon le diffuseur.", 12, muted, false));
         space(content, 14);
 
         sectionTitle("Cartes et aide");
@@ -3839,6 +3866,7 @@ public class MainActivity extends Activity {
                         authPrefs().edit().remove("pending_employer_mode").apply();
                         screenHistory.clear();
                         Toast.makeText(this, "Connexion réussie. Bienvenue sur TUN-JOBS !", Toast.LENGTH_LONG).show();
+                        playLoginIntro();
                         if (employerMode) chooseEmployerMode(); else showHome();
                     });
                 } else if (signup) {
@@ -3855,6 +3883,36 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> Toast.makeText(this, "Authentification : " + message, Toast.LENGTH_LONG).show());
             }
         }).start();
+    }
+
+    private void playLoginIntro() {
+        releaseLoginIntro();
+        try {
+            loginIntroPlayer = MediaPlayer.create(this, R.raw.intro);
+            if (loginIntroPlayer == null) return;
+            loginIntroPlayer.setVolume(0.85f, 0.85f);
+            loginIntroPlayer.setOnCompletionListener(player -> releaseLoginIntro());
+            loginIntroPlayer.setOnErrorListener((player, what, extra) -> {
+                releaseLoginIntro();
+                return true;
+            });
+            loginIntroPlayer.start();
+        } catch (Exception ignored) {
+            releaseLoginIntro();
+        }
+    }
+
+    private void releaseLoginIntro() {
+        if (loginIntroPlayer != null) {
+            try { loginIntroPlayer.stop(); } catch (Exception ignored) { }
+            try { loginIntroPlayer.release(); } catch (Exception ignored) { }
+            loginIntroPlayer = null;
+        }
+    }
+
+    @Override protected void onDestroy() {
+        releaseLoginIntro();
+        super.onDestroy();
     }
 
     private JSONObject supabaseAuthRequest(String endpoint, JSONObject payload) throws Exception {

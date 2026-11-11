@@ -14,8 +14,6 @@
             android:name=".CallActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
-        <activity android:name=".RadioActivity" android:exported="false" />
-        <activity android:name=".TvActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
