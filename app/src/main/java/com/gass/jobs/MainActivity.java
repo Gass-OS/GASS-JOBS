@@ -58,6 +58,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.io.ByteArrayOutputStream;
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 public class MainActivity extends Activity {
     private final int ink = Color.rgb(245, 246, 250);
