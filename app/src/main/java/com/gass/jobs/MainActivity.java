@@ -2603,6 +2603,21 @@ public class MainActivity extends Activity {
                 | android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         base("Discussion • "+other.name,"Messagerie privée après match réciproque.",-1,true);
 
+        LinearLayout chatIdentity = row();
+        chatIdentity.setGravity(Gravity.CENTER_VERTICAL);
+        chatIdentity.setPadding(dp(12), dp(10), dp(12), dp(10));
+        chatIdentity.setBackground(shape(panel, 18));
+        chatIdentity.addView(profileAvatar(other, 62), new LinearLayout.LayoutParams(dp(62), dp(62)));
+        LinearLayout identityText = column();
+        identityText.addView(text(other.name, 18, ink, true));
+        identityText.addView(text((other.isEmployer() ? "Recruteur" : "Candidat") + " • " + other.profession + " • " + other.city, 12, muted, false));
+        LinearLayout.LayoutParams identityParams = new LinearLayout.LayoutParams(0, -2, 1);
+        identityParams.leftMargin = dp(12);
+        chatIdentity.addView(identityText, identityParams);
+        chatIdentity.setOnClickListener(v -> showRealProfileDetails(other, () -> showPrivateChat(id, matchId, other)));
+        content.addView(chatIdentity, new LinearLayout.LayoutParams(-1, -2));
+        space(content, 10);
+
         LinearLayout callActions=row();
         callActions.addView(button("☎ Appel vocal",true,()->startMatchedCall(matchId,other,false)),
                 new LinearLayout.LayoutParams(0,dp(50),1));
@@ -2660,7 +2675,7 @@ public class MainActivity extends Activity {
                 new Thread(()->{
                     try{
                         rest("POST","job_messages",b);
-                        runOnUiThread(()->{input.setText("");refreshPrivateChat(id,messages,history);});
+                        runOnUiThread(()->{input.setText("");refreshPrivateChat(id,messages,history,other);});
                     }catch(Exception e){
                         String m=e.getMessage()==null?"Erreur":e.getMessage();
                         runOnUiThread(()->Toast.makeText(this,m,Toast.LENGTH_LONG).show());
@@ -2669,13 +2684,13 @@ public class MainActivity extends Activity {
             }catch(Exception e){Toast.makeText(this,"Message invalide.",Toast.LENGTH_SHORT).show();}
         }),new LinearLayout.LayoutParams(0,dp(56),1));
         hspace(actions,8);
-        actions.addView(button("↻",false,()->refreshPrivateChat(id,messages,history)),
+        actions.addView(button("↻",false,()->refreshPrivateChat(id,messages,history,other)),
                 new LinearLayout.LayoutParams(dp(58),dp(56)));
         content.addView(actions);
         refreshPrivateChat(id,messages,history);
     }
 
-    private void refreshPrivateChat(String id,LinearLayout box,ScrollView history){
+    private void refreshPrivateChat(String id,LinearLayout box,ScrollView history,RealProfile other){
         new Thread(()->{
             try{
                 JSONArray rs=rows("job_messages?select=sender_id,body,created_at&conversation_id=eq."+enc(id)
@@ -2711,6 +2726,13 @@ public class MainActivity extends Activity {
                         bubbleParams.leftMargin=dp(mine?42:0);
                         bubbleParams.rightMargin=dp(mine?0:42);
                         bubbleParams.bottomMargin=dp(9);
+                        if (!mine) {
+                            ImageView senderPhoto = profileAvatar(other, 34);
+                            LinearLayout.LayoutParams senderPhotoParams = new LinearLayout.LayoutParams(dp(34), dp(34));
+                            senderPhotoParams.rightMargin = dp(7);
+                            senderPhotoParams.topMargin = dp(2);
+                            line.addView(senderPhoto, senderPhotoParams);
+                        }
                         line.addView(bubble,bubbleParams);
                         box.addView(line,new LinearLayout.LayoutParams(-1,-2));
                     }
