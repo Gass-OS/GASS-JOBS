@@ -461,10 +461,9 @@ public class MainActivity extends Activity {
         searchIcon.setContentDescription("Rechercher");
         explain(searchIcon, "Recherche", "Ouvre la recherche d'offres par métier, gouvernorat, secteur ou type de contrat.");
         top.addView(searchIcon, new LinearLayout.LayoutParams(dp(44), dp(48)));
-        TextView bellIcon = topIcon("🔔", 20, () ->
-                Toast.makeText(this, "Aucune nouvelle notification.", Toast.LENGTH_SHORT).show());
+        TextView bellIcon = topIcon("🔔", 20, this::showNotifications);
         bellIcon.setContentDescription("Notifications");
-        explain(bellIcon, "Notifications", "Les alertes (nouvelles offres, réponses des employeurs) arriveront ici quand les comptes en ligne seront disponibles.");
+        explain(bellIcon, "Notifications", "Consultez vos nouveaux messages, alertes emploi et actualités TUN-JOBS.");
         top.addView(bellIcon, new LinearLayout.LayoutParams(dp(44), dp(48)));
         root.addView(top);
         }
@@ -1448,6 +1447,17 @@ public class MainActivity extends Activity {
         choiceRow("Taille du texte", "Agrandissez le texte si vous lisez difficilement.",
                 "text_size", new String[] {"Petit", "Normal", "Grand"}, 1);
 
+        sectionTitle("Emploi officiel & alertes");
+        content.addView(button("🇹🇳  Suivi des offres officielles", false, this::showOfficialMonitoring),
+                new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 8);
+        content.addView(button("🔔  Centre de notifications", false, this::showNotifications),
+                new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 8);
+        content.addView(button("⚙️  Préférences des notifications", false, this::showNotificationPreferences),
+                new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 14);
+
         sectionTitle("Cartes et aide");
         switchRow("Aide par appui long", "Maintenez un bouton ou une carte pour afficher son explication.", "help_long_press", true);
         switchRow("Astuces sur l'accueil", "Affiche un petit conseil au-dessus des cartes.", "tips", true);
@@ -1522,6 +1532,99 @@ public class MainActivity extends Activity {
         content.addView(button("ⓘ   À propos", false, this::showAboutMe), new LinearLayout.LayoutParams(-1, dp(52)));
         space(content, 14);
         content.addView(button("Retour aux emplois", true, this::showHome), new LinearLayout.LayoutParams(-1, dp(58)));
+    }
+
+    private void showNotificationPreferences() {
+        prepareScreen(true, this::showNotificationPreferences);
+        base("Préférences des notifications", "Choisissez les alertes que TUN-JOBS doit afficher.");
+        sectionTitle("Catégories");
+        switchRow("Nouveaux messages", "Alertes lorsqu'un membre vous écrit.", "notify_messages", true);
+        switchRow("Nouvelles offres", "Alertes pour les offres publiées et les annonces officielles vérifiées.", "notify_jobs", true);
+        switchRow("Actualités TUN-JOBS", "Nouveautés, maintenance et informations de service.", "notify_news", true);
+        space(content, 14);
+        infoCard("Notifications système Android", "Les alertes visibles lorsque l'application est fermée nécessitent l'activation du service push Firebase. Le centre de notifications dans l'application fonctionne avec votre compte Supabase.", "Comprendre la configuration", () -> new AlertDialog.Builder(this).setTitle("Notifications push").setMessage("Le projet doit être relié à Firebase Cloud Messaging et à une fonction serveur sécurisée. Aucun mot de passe ni clé privée ne doit être placé dans l'APK.").setPositiveButton("OK", null).show());
+        content.addView(button("Retour aux paramètres", true, this::showSettings), new LinearLayout.LayoutParams(-1, dp(54)));
+    }
+
+    private void showOfficialMonitoring() {
+        prepareScreen(true, this::showOfficialMonitoring);
+        base("Suivi des offres officielles", "Sources publiques tunisiennes • transparence sur la synchronisation.");
+        LinearLayout status = column();
+        status.setPadding(dp(16), dp(16), dp(16), dp(16));
+        status.setBackground(shape(panel, 18));
+        status.addView(text("SOURCES OFFICIELLES CONNECTÉES PAR LIENS", 14, gold, true));
+        space(status, 6);
+        status.addView(text("Le contrôle automatique quotidien n'est pas encore actif. Les portails ci-dessous sont accessibles directement ; aucune annonce n'est présentée comme synchronisée tant que le connecteur serveur n'a pas été validé.", 13, muted, false));
+        content.addView(status);
+        space(content, 14);
+        sectionTitle("Sources surveillées");
+        infoCard("ANETI — emploi.nat.tn", "Portail national de l'emploi. Consultez les offres et services directement auprès de l'ANETI.", "Ouvrir le portail ANETI", () -> openExternal("https://www.emploi.nat.tn/"));
+        infoCard("Idaraty.tn", "Portail national des services administratifs. Les avis de recrutement doivent être confirmés sur la page de l'organisme émetteur.", "Ouvrir Idaraty", () -> openExternal("https://www.idaraty.tn/"));
+        infoCard("Concours de la fonction publique", "Avis et concours publics. Vérifiez les dates, conditions et pièces requises dans l'avis original.", "Ouvrir concours.gov.tn", () -> openExternal("https://www.concours.gov.tn/"));
+        infoCard("Ministère de l'Emploi", "Communiqués, programmes et informations institutionnelles.", "Ouvrir le ministère", () -> openExternal("https://www.emploi.gov.tn/fr/"));
+        space(content, 10);
+        sectionTitle("Fréquence et fiabilité");
+        content.addView(text("Fréquence prévue : une vérification par jour côté serveur. Dernière vérification : aucune — connecteur en attente. Les annonces ne seront ajoutées au flux Emplois qu'après validation de leur URL officielle, de leur date et de leur contenu. Les liens sources resteront visibles.", 13, muted, false));
+        space(content, 14);
+        content.addView(button("Retour aux paramètres", true, this::showSettings), new LinearLayout.LayoutParams(-1, dp(54)));
+    }
+
+    private void showNotifications() {
+        prepareScreen(true, this::showNotifications);
+        base("Notifications", "Messages, offres d'emploi et actualités.");
+        if (!hasAuthSession()) {
+            content.addView(text("Connectez-vous pour consulter les notifications de votre compte.", 14, muted, false));
+            content.addView(button("Se connecter", true, this::showLogin), new LinearLayout.LayoutParams(-1, dp(54)));
+            return;
+        }
+        TextView loading = text("Chargement des notifications…", 14, muted, false);
+        content.addView(loading);
+        new Thread(() -> {
+            try {
+                JSONArray items = rows("job_notifications?select=id,category,title,body,created_at,read_at,action_url&user_id=eq." + enc(me()) + "&order=created_at.desc&limit=80");
+                runOnUiThread(() -> {
+                    loading.setVisibility(View.GONE);
+                    if (items.length() == 0) {
+                        content.addView(text("Vous êtes à jour. Aucune notification pour le moment.", 15, muted, false));
+                        return;
+                    }
+                    for (int i = 0; i < items.length(); i++) {
+                        JSONObject item = items.optJSONObject(i);
+                        if (item == null) continue;
+                        String id = item.optString("id", "");
+                        String category = item.optString("category", "news");
+                        if ("messages".equals(category) && !settings().getBoolean("notify_messages", true)) continue;
+                        if ("jobs".equals(category) && !settings().getBoolean("notify_jobs", true)) continue;
+                        if ("news".equals(category) && !settings().getBoolean("notify_news", true)) continue;
+                        LinearLayout card = column();
+                        card.setPadding(dp(15), dp(13), dp(15), dp(13));
+                        card.setBackground(shape(item.isNull("read_at") ? Color.rgb(39, 43, 52) : panel, 16));
+                        card.addView(text(item.optString("title", "TUN-JOBS"), 16, ink, true));
+                        space(card, 4);
+                        card.addView(text(item.optString("body", ""), 13, muted, false));
+                        space(card, 6);
+                        card.addView(text(item.optString("created_at", "").replace("T", " ").replace("Z", ""), 11, gold, false));
+                        card.setOnClickListener(v -> {
+                            if (!id.isEmpty()) new Thread(() -> {
+                                try {
+                                    JSONObject patch = new JSONObject(); patch.put("read_at", java.time.Instant.now().toString());
+                                    rest("PATCH", "job_notifications?id=eq." + enc(id) + "&user_id=eq." + enc(me()), patch);
+                                } catch (Exception ignored) { }
+                            }).start();
+                            String url = item.optString("action_url", "");
+                            if (!url.isEmpty() && (url.startsWith("https://") || url.startsWith("http://"))) openExternal(url);
+                            else showNotifications();
+                        });
+                        content.addView(card, new LinearLayout.LayoutParams(-1, -2));
+                        space(content, 8);
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    loading.setText("Impossible de charger les notifications : " + e.getMessage());
+                });
+            }
+        }).start();
     }
 
     private void projectCard(String logo, String title, String subtitle, String url) {
