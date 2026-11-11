@@ -835,12 +835,12 @@ public class MainActivity extends Activity {
         box.addView(icon);
         space(box, 8);
         TextView msg = text(candidates ? "Vous avez parcouru tous les profils de démonstration."
-                : "Vous avez parcouru toutes les offres ANETI chargées.", 18, ink, true);
+                : "Vous avez parcouru les offres ANETI et les profils fictifs de démonstration.", 18, ink, true);
         msg.setGravity(Gravity.CENTER);
         box.addView(msg);
         space(box, 18);
         box.addView(button("Recommencer", true, () -> {
-            if (candidates) candidateSwipeIndex = 0; else swipeIndex = 0;
+            if (employerMode) candidateSwipeIndex = 0; else swipeIndex = 0;
             avatarSalt = System.nanoTime();
             renderDeck();
         }), new LinearLayout.LayoutParams(-1, dp(52)));
@@ -869,13 +869,23 @@ public class MainActivity extends Activity {
         animating = false;
         deckHolder.removeAllViews();
         actionBar.removeAllViews();
-        final boolean candidates = employerMode;
-        final int total = candidates ? demoCandidates.size() : anetiJobs.size();
-        final int index = candidates ? candidateSwipeIndex : swipeIndex;
+
+        // Jobseekers see official ANETI offers first, followed by clearly labelled
+        // fictional candidate profiles using the eight supplied portrait photos.
+        // Recruiters retain their independent full candidate deck.
+        final boolean recruiterDeck = employerMode;
+        final int total = recruiterDeck ? demoCandidates.size() : anetiJobs.size() + demoCandidates.size();
+        final int index = recruiterDeck ? candidateSwipeIndex : swipeIndex;
         if (index >= total) {
-            deckHolder.addView(emptyDeck(candidates), new FrameLayout.LayoutParams(-1, -1));
+            deckHolder.addView(emptyDeck(recruiterDeck), new FrameLayout.LayoutParams(-1, -1));
             return;
         }
+
+        final boolean demoProfile = recruiterDeck || index >= anetiJobs.size();
+        final int candidateIndex = recruiterDeck ? index : index - anetiJobs.size();
+        final Job job = demoProfile ? null : anetiJobs.get(index);
+        final Candidate person = demoProfile ? demoCandidates.get(candidateIndex) : null;
+
         if (index + 1 < total) {
             View behind = new View(this);
             behind.setBackground(shape(Color.rgb(26, 28, 34), 28));
@@ -883,9 +893,10 @@ public class MainActivity extends Activity {
             behindParams.setMargins(dp(16), dp(16), dp(16), 0);
             deckHolder.addView(behind, behindParams);
         }
-        final Job job = candidates ? null : anetiJobs.get(index);
-        final Candidate person = candidates ? demoCandidates.get(index) : null;
-        final View card = candidates ? candidateCard(person, index, total) : jobCard(job, index, total);
+
+        final View card = demoProfile
+                ? candidateCard(person, candidateIndex, demoCandidates.size())
+                : jobCard(job, index, total);
         final TextView like = likeStamp;
         final TextView nope = nopeStamp;
         FrameLayout.LayoutParams cardParams = new FrameLayout.LayoutParams(-1, -1);
@@ -893,26 +904,26 @@ public class MainActivity extends Activity {
         deckHolder.addView(card, cardParams);
 
         final Runnable nextCard = () -> {
-            if (candidates) candidateSwipeIndex++; else swipeIndex++;
+            if (recruiterDeck) candidateSwipeIndex++; else swipeIndex++;
             renderDeck();
         };
         final Runnable saveThenNext = () -> {
-            if (candidates) saveCandidate(person); else saveJob(job);
+            if (demoProfile) saveCandidate(person); else saveJob(job);
             nextCard.run();
         };
         final Runnable details = () -> {
-            if (candidates) showCandidateDialog(person);
+            if (demoProfile) showCandidateDialog(person);
             else if (job.isOfficial()) showOfficialJob(job);
             else showJob(job.title, job.company, job.location, job.description);
         };
-        final Runnable cardHelp = () -> showHelp(candidates ? "Carte candidat" : "Carte offre",
-                candidates
-                        ? "Glissez vers la droite pour présélectionner ce profil, vers la gauche pour le passer. Touchez la carte pour lire le détail. Les profils sont fictifs et leur avatar est généré au hasard."
-                        : "Glissez vers la droite pour sauvegarder l'offre dans votre profil, vers la gauche pour la passer. Touchez la carte pour ouvrir le détail. Les cartes « ANETI » viennent du site officiel : ouvrez l'annonce originale avant de postuler.");
+        final Runnable cardHelp = () -> showHelp(demoProfile ? "Profil candidat fictif" : "Offre ANETI",
+                demoProfile
+                        ? "Cette carte présente un profil fictif avec une photo illustrative. Les informations et le contact ne représentent pas une vraie personne. Glissez à droite pour présélectionner, à gauche pour passer."
+                        : "Glissez vers la droite pour sauvegarder l'offre dans votre profil, vers la gauche pour la passer. Touchez la carte pour ouvrir le détail. Les cartes ANETI viennent du site officiel : vérifiez l'annonce originale avant de postuler.");
         attachSwipe(card, like, nope, nextCard, saveThenNext, details, cardHelp);
 
         addAction("↺", "Retour", Color.rgb(52, 54, 62), 50, () -> {
-            if (candidates) candidateSwipeIndex = Math.max(0, candidateSwipeIndex - 1);
+            if (recruiterDeck) candidateSwipeIndex = Math.max(0, candidateSwipeIndex - 1);
             else swipeIndex = Math.max(0, swipeIndex - 1);
             renderDeck();
         });
@@ -920,13 +931,13 @@ public class MainActivity extends Activity {
             nope.setAlpha(1f);
             fly(card, -1, nextCard);
         });
-        addAction("★", "Sauvegarder", Color.rgb(245, 178, 35), 58, () -> {
+        addAction("★", demoProfile ? "Présélectionner" : "Sauvegarder", Color.rgb(245, 178, 35), 58, () -> {
             like.setAlpha(1f);
             fly(card, 1, saveThenNext);
         });
-        addAction("♥", "Contacter", Color.rgb(30, 170, 95), 58, () -> {
-            if (candidates) {
-                Toast.makeText(this, "Profil fictif : le contact sera disponible avec un compte sécurisé.", Toast.LENGTH_LONG).show();
+        addAction("♥", demoProfile ? "Contact démo" : "Contacter", Color.rgb(30, 170, 95), 58, () -> {
+            if (demoProfile) {
+                Toast.makeText(this, "Profil fictif : aucun contact réel n'est associé.", Toast.LENGTH_LONG).show();
             } else if (job.isOfficial()) {
                 openExternal(job.sourceUrl);
             } else {
@@ -934,8 +945,8 @@ public class MainActivity extends Activity {
             }
         });
         addAction("➤", "Partager", Color.rgb(35, 110, 230), 50, () -> {
-            String message = candidates
-                    ? "Découvrez TUN-JOBS, l'application emploi et recrutement en Tunisie."
+            String message = demoProfile
+                    ? "Découvrez TUN-JOBS — profil fictif de démonstration, sans contact réel."
                     : job.title + " — " + job.company + ", " + job.location
                       + (job.isOfficial() ? " • Offre publiée par ANETI : " + job.sourceUrl
                                           : " (annonce de démonstration)");
