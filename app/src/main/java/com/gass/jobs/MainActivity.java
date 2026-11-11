@@ -1028,6 +1028,7 @@ public class MainActivity extends Activity {
                     publishedJobs.clear(); publishedJobs.addAll(loaded);
                     publishedJobsLoading=false;
                     if (!employerMode && deckHolder!=null) renderDeck();
+                    if (resultsContainer!=null) renderJobs();
                 });
             } catch(Exception e) {
                 publishedJobsLoading=false;
@@ -1139,6 +1140,7 @@ public class MainActivity extends Activity {
         resultsContainer = column();
         content.addView(resultsContainer);
         renderJobs();
+        loadPublishedJobs();
         space(content, 8);
         content.addView(button("Trouver un bureau de l'emploi", false, this::showEmploymentOffices));
         space(content, 8);
@@ -2014,12 +2016,14 @@ public class MainActivity extends Activity {
             if(jobTitle.isEmpty()||employer.isEmpty()||details.isEmpty()) {
                 Toast.makeText(this,"Complétez les champs obligatoires (*).",Toast.LENGTH_LONG).show(); return;
             }
+            final String govValue=selected(region), sectorValue=selected(sector), contractValue=selected(contract);
+            final String salaryValue=salary.getText().toString().trim();
             new Thread(() -> {
                 try {
                     JSONObject offer=new JSONObject();
                     offer.put("owner_id",me()); offer.put("title",jobTitle); offer.put("company",employer);
-                    offer.put("governorate",selected(region)); offer.put("sector",selected(sector));
-                    offer.put("contract",selected(contract)); offer.put("salary",salary.getText().toString().trim());
+                    offer.put("governorate",govValue); offer.put("sector",sectorValue);
+                    offer.put("contract",contractValue); offer.put("salary",salaryValue);
                     offer.put("description",details); offer.put("status","published");
                     rest("POST","job_offers",offer);
                     runOnUiThread(() -> {
