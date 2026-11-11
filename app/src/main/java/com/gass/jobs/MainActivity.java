@@ -2086,8 +2086,8 @@ public class MainActivity extends Activity {
     private void clearEverything() {
         clearSavedItems();
         profilePrefs().edit().clear().apply();
-        String[] names = {"gass_jobs_drafts", PREFS_EMPLOYER};
-        for (String name : names) getSharedPreferences(name, MODE_PRIVATE).edit().clear().apply();
+        getSharedPreferences("gass_jobs_drafts", MODE_PRIVATE).edit().clear().apply();
+        employerPrefs().edit().clear().apply();
         new File(getFilesDir(), accountProfileFileName("profile-photo")).delete();
         new File(getFilesDir(), accountProfileFileName("profile-cv")).delete();
         employerMode = false;
@@ -2275,7 +2275,7 @@ public class MainActivity extends Activity {
 
     // ================================================================ recruiter identification
     private boolean hasEmployerProfile() {
-        return getSharedPreferences(PREFS_EMPLOYER, MODE_PRIVATE).getBoolean("done", false);
+        return employerPrefs().getBoolean("done", false);
     }
 
     private void requireEmployerProfile(Runnable next) {
@@ -2291,12 +2291,12 @@ public class MainActivity extends Activity {
     }
 
     private String employerDisplayName() {
-        SharedPreferences ep = getSharedPreferences(PREFS_EMPLOYER, MODE_PRIVATE);
+        SharedPreferences ep = employerPrefs();
         return "company".equals(ep.getString("type", "")) ? ep.getString("legal_name", "") : ep.getString("name", "");
     }
 
     private String employerGovernorate() {
-        return getSharedPreferences(PREFS_EMPLOYER, MODE_PRIVATE).getString("governorate", defaultGovernorate());
+        return employerPrefs().getString("governorate", defaultGovernorate());
     }
 
     private int digitCount(String value) {
@@ -2341,7 +2341,7 @@ public class MainActivity extends Activity {
     private void showEmployerType(final Runnable next) {
         prepareScreen(false, () -> showEmployerType(next));
         base("Qui recrute ?", "Choisissez votre situation pour adapter le formulaire.", TAB_EMPLOYERS, true);
-        final SharedPreferences ep = getSharedPreferences(PREFS_EMPLOYER, MODE_PRIVATE);
+        final SharedPreferences ep = employerPrefs();
         final String[] choice = {ep.getString("type", "")};
         content.addView(text("Avant de recruter, dites-nous si vous recrutez seul(e) ou pour une société. Nous vous demanderons les bonnes informations.", 14, muted, false));
         space(content, 14);
@@ -2503,7 +2503,7 @@ public class MainActivity extends Activity {
     }
 
     private void addEmployerSummary() {
-        final SharedPreferences ep = getSharedPreferences(PREFS_EMPLOYER, MODE_PRIVATE);
+        final SharedPreferences ep = employerPrefs();
         boolean company = "company".equals(ep.getString("type", ""));
         LinearLayout card = column();
         card.setPadding(dp(18), dp(16), dp(18), dp(16));
@@ -2700,6 +2700,13 @@ public class MainActivity extends Activity {
         uid = uid.replaceAll("[^A-Za-z0-9_-]", "_");
         if (uid.isEmpty()) uid = "signed-out";
         return baseName + "-" + uid;
+    }
+
+    private SharedPreferences employerPrefs() {
+        String uid = authPrefs().getString("user_id", "").trim();
+        if (uid.isEmpty()) uid = "signed-out";
+        uid = uid.replaceAll("[^A-Za-z0-9_-]", "_");
+        return getSharedPreferences("tun_jobs_employer_" + uid, MODE_PRIVATE);
     }
 
     private boolean hasAuthSession() {
