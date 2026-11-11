@@ -1574,7 +1574,7 @@ public class MainActivity extends Activity {
         base("Notifications", "Messages, offres d'emploi et actualités.");
         if (!hasAuthSession()) {
             content.addView(text("Connectez-vous pour consulter les notifications de votre compte.", 14, muted, false));
-            content.addView(button("Se connecter", true, this::showLogin), new LinearLayout.LayoutParams(-1, dp(54)));
+            content.addView(button("Se connecter", true, this::showAuth), new LinearLayout.LayoutParams(-1, dp(54)));
             return;
         }
         TextView loading = text("Chargement des notifications…", 14, muted, false);
@@ -1607,7 +1607,7 @@ public class MainActivity extends Activity {
                         card.setOnClickListener(v -> {
                             if (!id.isEmpty()) new Thread(() -> {
                                 try {
-                                    JSONObject patch = new JSONObject(); patch.put("read_at", java.time.Instant.now().toString());
+                                    JSONObject patch = new JSONObject(); patch.put("read_at", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).format(new java.util.Date()));
                                     rest("PATCH", "job_notifications?id=eq." + enc(id) + "&user_id=eq." + enc(me()), patch);
                                 } catch (Exception ignored) { }
                             }).start();
