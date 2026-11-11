@@ -1413,6 +1413,18 @@ public class MainActivity extends Activity {
         Toast.makeText(this, added ? "Profil ajouté à la présélection." : "Profil déjà présélectionné.", Toast.LENGTH_SHORT).show();
     }
 
+    private void openSupportEmail() {
+        String subject = Uri.encode("TUN-JOBS - Support & Help");
+        String body = Uri.encode("Bonjour,\n\nJe rencontre le problème suivant :\n\nÉtapes pour reproduire le problème :\n\nAppareil / version Android :\n\nMerci.");
+        Intent emailIntent = new Intent(Intent.ACTION_SENDTO,
+                Uri.parse("mailto:iirc69mrgh@gmail.com?subject=" + subject + "&body=" + body));
+        try {
+            startActivity(emailIntent);
+        } catch (Exception error) {
+            Toast.makeText(this, "Aucune application e-mail n'est disponible sur cet appareil.", Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void menuCard(String icon, String title, String detail, Runnable action) {
         LinearLayout card = row(); card.setGravity(Gravity.CENTER_VERTICAL); card.setPadding(dp(16), dp(14), dp(16), dp(14)); card.setBackground(shape(panel, 19));
         TextView symbol = text(icon, 38, gold, true); symbol.setGravity(Gravity.CENTER); card.addView(symbol, new LinearLayout.LayoutParams(dp(66), dp(66)));
@@ -1529,6 +1541,10 @@ public class MainActivity extends Activity {
         menuCard("ⓘ", "À propos de nous", "TUN-JOBS, GASS-OS, projets et licences", this::showAboutMe);
         menuCard("🏛️", "Sites officiels", "ANETI et portails publics de l'emploi", this::showOfficialSources);
         menuCard("📍", "Bureaux régionaux", "Bureaux de l'emploi en Tunisie", this::showEmploymentOffices);
+        menuCard("☕", "Buy Me a Coffee", "Soutenez le développement de TUN-JOBS • Aymen Gharsalli",
+                () -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://buymeacoffee.com/AymenGharsalli"))));
+        menuCard("🛟", "Support & Help", "Signaler un bug, un problème ou demander de l'aide par e-mail",
+                this::openSupportEmail);
         menuCard("⇥", "Se déconnecter", "Fermer cette session sur cet appareil", () -> confirmAction("Se déconnecter ?", "Votre session sera fermée sur cet appareil. Vos données locales seront conservées.", "Déconnexion", this::logout));
     }
     private View mediaSettingCard(String logoText, String titleText, String subtitleText, Runnable action) {
