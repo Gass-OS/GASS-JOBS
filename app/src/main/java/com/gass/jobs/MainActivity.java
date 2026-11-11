@@ -1427,6 +1427,91 @@ public class MainActivity extends Activity {
                 }).setNegativeButton("Annuler", null).show();
     }
 
+    private void showInbox() {
+        prepareScreen(true, this::showInbox);
+        base("Boîte de réception", "Vos interactions et conversations au même endroit.", TAB_INBOX, true);
+        LinearLayout hero = column();
+        hero.setPadding(dp(18), dp(18), dp(18), dp(18));
+        hero.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[] {Color.rgb(65, 48, 22), Color.rgb(25, 27, 33), Color.rgb(15, 17, 22)}));
+        hero.addView(text("📥  INBOX", 25, Color.WHITE, true));
+        space(hero, 5);
+        hero.addView(text("Retrouvez ici les personnes intéressées par votre profil, vos matches et vos messages privés.", 13, Color.rgb(231, 224, 208), false));
+        content.addView(hero, new LinearLayout.LayoutParams(-1, -2));
+        space(content, 16);
+        menuCard("♥", "Likes reçus", "Consultez les personnes qui ont aimé votre profil.", this::loadIncomingLikes);
+        menuCard("🤝", "Mes matches", "Découvrez vos mises en relation réciproques et leurs profils.", this::loadMyMatches);
+        menuCard("💬", "Messages", "Ouvrez directement vos conversations privées.", this::loadInboxMessages);
+    }
+
+    private void loadInboxMessages() {
+        prepareScreen(false, this::loadInboxMessages);
+        base("Messages", "Vos conversations privées après un match réciproque.", TAB_INBOX, true);
+        TextView status = text("Chargement des conversations…", 14, muted, false);
+        content.addView(status);
+        new Thread(() -> {
+            try {
+                String uid = me();
+                JSONArray matches = rows("job_matches?select=id,user_a,user_b&or=(user_a.eq." + enc(uid) + ",user_b.eq." + enc(uid) + ")&order=created_at.desc");
+                ArrayList<String> ids = new ArrayList<>(), matchIds = new ArrayList<>();
+                for (int i = 0; i < matches.length(); i++) {
+                    JSONObject item = matches.getJSONObject(i);
+                    matchIds.add(item.optString("id", ""));
+                    ids.add(item.optString("user_a", "").equals(uid) ? item.optString("user_b", "") : item.optString("user_a", ""));
+                }
+                JSONArray profiles = new JSONArray();
+                if (!ids.isEmpty()) {
+                    StringBuilder in = new StringBuilder();
+                    for (String value : ids) { if (in.length() > 0) in.append(","); in.append(value); }
+                    profiles = rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability,bio,languages,certifications,experience_years,photo_url,account_type&user_id=in.(" + in + ")");
+                }
+                java.util.HashMap<String, RealProfile> byId = new java.util.HashMap<>();
+                for (int i = 0; i < profiles.length(); i++) {
+                    RealProfile p = new RealProfile(profiles.getJSONObject(i));
+                    byId.put(p.id, p);
+                }
+                ArrayList<RealProfile> people = new ArrayList<>();
+                ArrayList<String> matched = new ArrayList<>();
+                for (int i = 0; i < ids.size(); i++) {
+                    if (byId.containsKey(ids.get(i))) {
+                        people.add(byId.get(ids.get(i)));
+                        matched.add(matchIds.get(i));
+                    }
+                }
+                runOnUiThread(() -> {
+                    status.setVisibility(View.GONE);
+                    if (people.isEmpty()) content.addView(text("Aucune conversation pour le moment. Un match réciproque permet de commencer à discuter.", 14, muted, false));
+                    for (int i = 0; i < people.size(); i++) {
+                        RealProfile p = people.get(i);
+                        String matchId = matched.get(i);
+                        LinearLayout card = row();
+                        card.setGravity(Gravity.CENTER_VERTICAL);
+                        card.setPadding(dp(14), dp(12), dp(14), dp(12));
+                        card.setBackground(shape(panel, 18));
+                        card.addView(profileAvatar(p, 58), new LinearLayout.LayoutParams(dp(58), dp(58)));
+                        LinearLayout details = column();
+                        details.addView(text(p.name, 17, ink, true));
+                        details.addView(text(p.profession + " • " + p.city, 12, muted, false));
+                        LinearLayout.LayoutParams detailParams = new LinearLayout.LayoutParams(0, -2, 1);
+                        detailParams.leftMargin = dp(12);
+                        card.addView(details, detailParams);
+                        card.addView(button("Ouvrir", true, () -> openMatchedChat(matchId, p)));
+                        content.addView(card, new LinearLayout.LayoutParams(-1, -2));
+                        space(content, 9);
+                    }
+                    content.addView(button("Actualiser", false, this::loadInboxMessages), new LinearLayout.LayoutParams(-1, dp(48)));
+                    content.addView(button("Retour à Inbox", false, this::showInbox), new LinearLayout.LayoutParams(-1, dp(48)));
+                });
+            } catch (Exception e) {
+                String message = e.getMessage() == null ? "Erreur réseau" : e.getMessage();
+                runOnUiThread(() -> {
+                    status.setText("Erreur : " + message);
+                    content.addView(button("Réessayer", true, this::loadInboxMessages));
+                });
+            }
+        }).start();
+    }
+
     private void showMenu() {
         prepareScreen(false, this::showMenu); base("Plus", "Raccourcis, langue et réglages de TUN-JOBS.");
         LinearLayout banner = column(); banner.setPadding(dp(20), dp(22), dp(20), dp(22)); banner.setBackground(shape(Color.rgb(24, 26, 31), 18));
