@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.media.MediaPlayer;
+import android.media.ToneGenerator;
 import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -66,12 +67,13 @@ import org.json.JSONArray;
 
 public class MainActivity extends Activity {
     private MediaPlayer loginIntroPlayer;
-    private final int ink = Color.rgb(245, 246, 250);
-    private final int muted = Color.rgb(171, 178, 190);
-    private final int green = Color.rgb(245, 178, 35);
-    private final int canvas = Color.rgb(10, 11, 14);
-    private final int panel = Color.rgb(25, 27, 33);
-    private final int gold = Color.rgb(255, 190, 45);
+    private int ink = Color.rgb(245, 246, 250);
+    private int muted = Color.rgb(171, 178, 190);
+    private int green = Color.rgb(245, 178, 35);
+    private int canvas = Color.rgb(10, 11, 14);
+    private int panel = Color.rgb(25, 27, 33);
+    private int gold = Color.rgb(255, 190, 45);
+    private int accentDark = Color.rgb(222, 145, 8);
     private LinearLayout root;
     private LinearLayout content;
     private boolean employerMode = false;
@@ -247,6 +249,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        applyVisualSettings();
         if (hasAuthSession()) {
             // Restore the signed-in user's cloud profile before opening the app.
             new Thread(() -> {
@@ -298,7 +301,7 @@ public class MainActivity extends Activity {
 
     private GradientDrawable goldGradient(int radiusDp) {
         GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[] {Color.rgb(255, 204, 75), Color.rgb(222, 145, 8)});
+                new int[] {gold, accentDark});
         d.setCornerRadius(dp(radiusDp));
         return d;
     }
@@ -318,7 +321,7 @@ public class MainActivity extends Activity {
         b.setText(tr(label));
         b.setAllCaps(false);
         b.setTextSize(15 * textScale());
-        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setTypeface(appTypeface(Typeface.BOLD));
         b.setMinHeight(dp(48));
         b.setMinimumHeight(dp(48));
         b.setMinWidth(0);
@@ -326,7 +329,7 @@ public class MainActivity extends Activity {
         b.setGravity(Gravity.CENTER);
         b.setStateListAnimator(null);
         b.setTextColor(primary ? Color.rgb(20, 20, 22) : ink);
-        b.setBackground(primary ? goldGradient(26) : shape(Color.rgb(39, 41, 47), 26));
+        b.setBackground(primary ? goldGradient(26) : shape(panel, 26));
         b.setPadding(dp(16), dp(10), dp(16), dp(10));
         b.setOnClickListener(v -> action.run());
         return b;
@@ -386,7 +389,7 @@ public class MainActivity extends Activity {
         v.setText(tr(value));
         v.setTextSize(size * textScale());
         v.setTextColor(color);
-        if (bold) v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        v.setTypeface(appTypeface(bold ? Typeface.BOLD : Typeface.NORMAL));
         v.setGravity(Gravity.CENTER_VERTICAL);
         return v;
     }
@@ -444,7 +447,7 @@ public class MainActivity extends Activity {
         if (!chromeless) {
         LinearLayout top = row();
         top.setPadding(dp(8), dp(6), dp(8), dp(6));
-        top.setBackgroundColor(Color.rgb(8, 9, 12));
+        top.setBackgroundColor(canvas);
         TextView menuIcon = topIcon("☰", 26, this::showMenu);
         menuIcon.setContentDescription("Menu");
         explain(menuIcon, "Menu", "Ouvre le menu : votre profil, les paramètres, les conseils, les sites officiels de l'emploi et les bureaux régionaux.");
@@ -501,7 +504,7 @@ public class MainActivity extends Activity {
 
     private View buildNav(int active) {
         LinearLayout nav = row();
-        nav.setBackgroundColor(Color.rgb(12, 13, 17));
+        nav.setBackgroundColor(canvas);
         nav.setPadding(0, dp(4), 0, dp(6));
         String[] icons = {"🏠", "💼", "👤", "📥", "🏢", "⚙️"};
         String[] labels = {"Accueil", "Offres", "Profil", "Inbox", "Recrut.", "Plus"};
@@ -848,7 +851,7 @@ public class MainActivity extends Activity {
         b.setText(glyph);
         b.setTextSize(sizeDp >= 58 ? 26 : 22);
         b.setTextColor(Color.WHITE);
-        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setTypeface(appTypeface(Typeface.BOLD));
         b.setGravity(Gravity.CENTER);
         b.setBackground(circle(color));
         b.setContentDescription(label);
@@ -1535,6 +1538,7 @@ public class MainActivity extends Activity {
                 () -> startActivity(new Intent(this, RadioActivity.class)));
         menuCard("📺", "Télévision en direct", "Chaînes publiques • pays et catégories",
                 () -> startActivity(new Intent(this, TvActivity.class)));
+        menuCard("👑", "TUN-JOBS VIP • Coming Soon", "CV intelligent et assistance aux candidatures", this::showVipSubscription);
         menuCard("🌐", "Langue / Language", "Français • English • العربية", this::chooseLanguage);
         menuCard("⚙️", "Paramètres", "Apparence, région, compte et confidentialité", this::showSettings);
         menuCard("💡", "Conseils et aide", "Guides et assistance", this::showTips);
@@ -1578,9 +1582,21 @@ public class MainActivity extends Activity {
         prepareScreen(false, this::showSettings);
         base("Paramètres", "Personnalisez TUN-JOBS sur cet appareil.");
 
-        sectionTitle("Apparence");
+        sectionTitle("Apparence • personnalisation");
+        content.addView(button("🎨  Thème de couleurs : " + themeLabel(), false, this::showThemePicker),
+                new LinearLayout.LayoutParams(-1, dp(54)));
+        space(content, 8);
+        content.addView(button("🔤  Police : " + fontLabel(), false, this::showFontPicker),
+                new LinearLayout.LayoutParams(-1, dp(54)));
+        space(content, 8);
+        content.addView(button("🔔  Son des notifications : " + soundLabel(), false, this::showNotificationSoundPicker),
+                new LinearLayout.LayoutParams(-1, dp(54)));
+        space(content, 8);
         choiceRow("Taille du texte", "Agrandissez le texte si vous lisez difficilement.",
                 "text_size", new String[] {"Petit", "Normal", "Grand"}, 1);
+        sectionTitle("TUN-JOBS VIP");
+        vipSettingsCard();
+        space(content, 14);
 
         sectionTitle("Emploi officiel & alertes");
         content.addView(button("🇹🇳  Suivi des offres officielles", false, this::showOfficialMonitoring),
@@ -1667,6 +1683,117 @@ public class MainActivity extends Activity {
         content.addView(button("ⓘ   À propos", false, this::showAboutMe), new LinearLayout.LayoutParams(-1, dp(52)));
         space(content, 14);
         content.addView(button("Retour aux emplois", true, this::showHome), new LinearLayout.LayoutParams(-1, dp(58)));
+    }
+
+
+    private String themeLabel() {
+        String v=settings().getString("theme","gold_dark");
+        if("blue_dark".equals(v)) return "Blue Dark";
+        if("red_dark".equals(v)) return "Red Dark";
+        if("amber".equals(v)) return "Amber";
+        if("green_matrix".equals(v)) return "Green Matrix";
+        if("purple_dark".equals(v)) return "Purple Dark";
+        return "Gold Dark";
+    }
+    private String fontLabel() {
+        String v=settings().getString("font","system");
+        if("comic".equals(v)) return "Comic Sans style";
+        if("nerd".equals(v)) return "Nerd-style Mono";
+        if("calibri".equals(v)) return "Calibri style";
+        if("tahoma".equals(v)) return "Tahoma style";
+        return "System";
+    }
+    private String soundLabel() {
+        String v=settings().getString("notification_sound","modern");
+        if("silent".equals(v)) return "Silent";
+        if("classic".equals(v)) return "Classic";
+        if("soft".equals(v)) return "Soft";
+        if("digital".equals(v)) return "Digital";
+        return "Modern";
+    }
+    private void applyVisualSettings() {
+        String t=settings().getString("theme","gold_dark");
+        ink=Color.rgb(245,247,250); muted=Color.rgb(166,177,192);
+        if("blue_dark".equals(t)){canvas=Color.rgb(7,15,30);panel=Color.rgb(17,31,53);gold=Color.rgb(75,164,255);accentDark=Color.rgb(25,91,177);}
+        else if("red_dark".equals(t)){canvas=Color.rgb(25,9,13);panel=Color.rgb(48,19,26);gold=Color.rgb(255,91,105);accentDark=Color.rgb(174,34,54);}
+        else if("amber".equals(t)){canvas=Color.rgb(29,20,8);panel=Color.rgb(53,37,16);gold=Color.rgb(255,181,55);accentDark=Color.rgb(188,105,18);}
+        else if("green_matrix".equals(t)){canvas=Color.rgb(3,14,9);panel=Color.rgb(9,30,18);gold=Color.rgb(66,255,137);accentDark=Color.rgb(0,135,67);}
+        else if("purple_dark".equals(t)){canvas=Color.rgb(17,10,29);panel=Color.rgb(34,22,53);gold=Color.rgb(190,130,255);accentDark=Color.rgb(112,62,177);}
+        else {canvas=Color.rgb(10,11,14);panel=Color.rgb(25,27,33);gold=Color.rgb(255,190,45);accentDark=Color.rgb(222,145,8);}
+        green=gold;
+    }
+    private Typeface appTypeface(int style) {
+        String f=settings().getString("font","system");
+        if("comic".equals(f)) return Typeface.create("casual",style);
+        if("nerd".equals(f)) return Typeface.create("monospace",style);
+        if("calibri".equals(f)||"tahoma".equals(f)) return Typeface.create("sans-serif",style);
+        return Typeface.create(Typeface.DEFAULT,style);
+    }
+    private void showThemePicker() {
+        final String[] labels={"Blue Dark","Red Dark","Amber","Gold Dark","Green Matrix","Purple Dark"};
+        final String[] vals={"blue_dark","red_dark","amber","gold_dark","green_matrix","purple_dark"};
+        int selected=0; String current=settings().getString("theme","gold_dark");
+        for(int i=0;i<vals.length;i++) if(vals[i].equals(current)) selected=i;
+        new AlertDialog.Builder(this).setTitle("Choisir un thème").setSingleChoiceItems(labels,selected,(d,w)->{
+            settings().edit().putString("theme",vals[w]).apply(); applyVisualSettings(); d.dismiss(); refreshScreen();
+            Toast.makeText(this,"Thème appliqué : "+labels[w],Toast.LENGTH_SHORT).show();
+        }).setNegativeButton("Fermer",null).show();
+    }
+    private void showFontPicker() {
+        final String[] labels={"System","Comic Sans style","Nerd-style Mono","Calibri style","Tahoma style"};
+        final String[] vals={"system","comic","nerd","calibri","tahoma"};
+        int selected=0; String current=settings().getString("font","system");
+        for(int i=0;i<vals.length;i++) if(vals[i].equals(current)) selected=i;
+        new AlertDialog.Builder(this).setTitle("Choisir une police").setSingleChoiceItems(labels,selected,(d,w)->{
+            settings().edit().putString("font",vals[w]).apply(); d.dismiss(); refreshScreen();
+            Toast.makeText(this,"Police appliquée : "+labels[w],Toast.LENGTH_SHORT).show();
+        }).setMessage("Comic Sans, Calibri et Tahoma utilisent les familles Android les plus proches. Nerd-style utilise une police monospace ; les glyphes Nerd Font dépendent des polices installées sur Android.")
+          .setNegativeButton("Fermer",null).show();
+    }
+    private void playNotificationPreview(String style) {
+        if("silent".equals(style)){Toast.makeText(this,"Mode silencieux sélectionné.",Toast.LENGTH_SHORT).show();return;}
+        int tone=ToneGenerator.TONE_PROP_PROMPT;
+        if("classic".equals(style)) tone=ToneGenerator.TONE_PROP_BEEP;
+        else if("soft".equals(style)) tone=ToneGenerator.TONE_PROP_ACK;
+        else if("digital".equals(style)) tone=ToneGenerator.TONE_DTMF_0;
+        try {
+            final ToneGenerator player=new ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION,75);
+            player.startTone(tone,220);
+            new android.os.Handler(getMainLooper()).postDelayed(player::release,350);
+        } catch(Exception e){Toast.makeText(this,"Aperçu sonore indisponible.",Toast.LENGTH_SHORT).show();}
+    }
+    private void showNotificationSoundPicker() {
+        final String[] labels={"Modern","Classic","Soft","Digital","Silent"};
+        final String[] vals={"modern","classic","soft","digital","silent"};
+        int selected=0; String current=settings().getString("notification_sound","modern");
+        for(int i=0;i<vals.length;i++) if(vals[i].equals(current)) selected=i;
+        new AlertDialog.Builder(this).setTitle("Style sonore des notifications").setSingleChoiceItems(labels,selected,(d,w)->{
+            settings().edit().putString("notification_sound",vals[w]).apply(); playNotificationPreview(vals[w]); d.dismiss(); refreshScreen();
+        }).setMessage("Touchez un style pour l'enregistrer et écouter un aperçu. Le son des notifications push sera appliqué lorsque le service push Android sera activé.")
+          .setNegativeButton("Fermer",null).show();
+    }
+    private void vipSettingsCard() {
+        LinearLayout card=column(); card.setPadding(dp(16),dp(15),dp(16),dp(15)); card.setBackground(shape(panel,18));
+        card.addView(text("👑  TUN-JOBS VIP",18,gold,true)); space(card,5);
+        card.addView(text("Bientôt disponible • CV intelligent • dossiers de candidature • assistant de suivi",13,muted,false));
+        space(card,10); card.addView(button("Découvrir VIP • Coming Soon",true,this::showVipSubscription),new LinearLayout.LayoutParams(-1,dp(50)));
+        content.addView(card,new LinearLayout.LayoutParams(-1,-2));
+    }
+    private void showVipSubscription() {
+        prepareScreen(false,this::showVipSubscription);
+        base("TUN-JOBS VIP 👑","Une expérience premium pour préparer et suivre vos candidatures.");
+        infoCard("CV intelligent","Créez un CV professionnel à partir des informations de votre profil, avec plusieurs modèles et export PDF.","Bientôt disponible",()->{});
+        infoCard("Candidatures assistées","Préparez automatiquement vos dossiers, lettres et messages adaptés à chaque offre.","Bientôt disponible",()->{});
+        infoCard("Assistant de demande","Aide à remplir et organiser vos demandes d'emploi. Toute candidature devra être vérifiée et validée par vous avant envoi.","Bientôt disponible",()->{});
+        infoCard("Suivi VIP","Historique, rappels et état des candidatures depuis un seul espace.","Bientôt disponible",()->{});
+        space(content,10);
+        content.addView(text("Aucun paiement n'est demandé dans cette version. L'abonnement, les tarifs et les automatisations seront activés uniquement après la mise en place du service sécurisé.",13,muted,false));
+        space(content,12);
+        content.addView(button("🔔  Je suis intéressé(e)",true,()->{
+            settings().edit().putBoolean("vip_interest",true).apply();
+            Toast.makeText(this,"Votre intérêt VIP est enregistré sur cet appareil.",Toast.LENGTH_LONG).show();
+        }),new LinearLayout.LayoutParams(-1,dp(54)));
+        space(content,8); content.addView(button("Retour aux paramètres",false,this::showSettings),new LinearLayout.LayoutParams(-1,dp(50)));
     }
 
     private void showNotificationPreferences() {
