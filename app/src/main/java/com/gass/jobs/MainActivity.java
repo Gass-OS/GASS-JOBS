@@ -1713,14 +1713,56 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    /** Compact, original GASS-OS project marks drawn natively (no empty text placeholders or remote logo dependency). */
+    private final class ProjectLogoView extends View {
+        private final String code;
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private int accent;
+        ProjectLogoView(Context context, String value) {
+            super(context);
+            code = value == null ? "OS" : value;
+            if ("GJ".equals(code)) accent = Color.rgb(224, 174, 76);
+            else if ("KC".equals(code)) accent = Color.rgb(91, 190, 143);
+            else if ("LN".equals(code)) accent = Color.rgb(151, 130, 235);
+            else if ("WH".equals(code)) accent = Color.rgb(77, 190, 220);
+            else if ("GN".equals(code)) accent = Color.rgb(80, 190, 164);
+            else if ("GT".equals(code)) accent = Color.rgb(170, 139, 230);
+            else accent = Color.rgb(226, 184, 91);
+            setContentDescription("Logo du projet " + code + " de GASS-OS");
+        }
+        @Override protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float w = getWidth(), h = getHeight();
+            float r = Math.min(w, h) * .23f;
+            paint.setShader(new LinearGradient(0, 0, w, h,
+                    new int[] {Color.rgb(35, 39, 49), Color.rgb(15, 18, 25)}, null, Shader.TileMode.CLAMP));
+            canvas.drawRoundRect(0, 0, w, h, r, r, paint);
+            paint.setShader(null);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.5f, w * .035f));
+            paint.setColor(accent);
+            canvas.drawRoundRect(w*.07f, h*.07f, w*.93f, h*.93f, r*.78f, r*.78f, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(accent);
+            canvas.drawCircle(w*.5f, h*.39f, w*.19f, paint);
+            paint.setColor(Color.rgb(20, 23, 30));
+            canvas.drawCircle(w*.5f, h*.39f, w*.125f, paint);
+            paint.setColor(Color.WHITE);
+            paint.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setTextSize(w*.30f);
+            canvas.drawText(code, w*.5f, h*.79f, paint);
+            paint.setColor(accent);
+            canvas.drawCircle(w*.82f, h*.19f, w*.045f, paint);
+        }
+    }
+
     private void projectCard(String logo, String title, String subtitle, String url) {
         LinearLayout card = row();
         card.setPadding(dp(15), dp(14), dp(14), dp(14));
         card.setBackground(shape(panel, 18));
-        TextView mark = text(logo, 25, Color.WHITE, true);
-        mark.setGravity(Gravity.CENTER);
-        mark.setBackground(shape(Color.rgb(42, 38, 29), 14));
-        card.addView(mark, new LinearLayout.LayoutParams(dp(54), dp(54)));
+        ProjectLogoView mark = new ProjectLogoView(this, logo);
+        card.addView(mark, new LinearLayout.LayoutParams(dp(58), dp(58)));
         LinearLayout labels = column();
         labels.addView(text(title, 16, ink, true));
         space(labels, 3);
