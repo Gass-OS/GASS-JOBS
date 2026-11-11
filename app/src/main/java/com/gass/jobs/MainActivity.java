@@ -1679,6 +1679,16 @@ public class MainActivity extends Activity {
         content.addView(button("Joindre mon CV (PDF ou document)", false, () -> pickProfileFile(PICK_PROFILE_CV, "application/pdf")),
                 new LinearLayout.LayoutParams(-1, dp(56)));
         space(content, 14);
+
+        Switch publishToggle = new Switch(this);
+        publishToggle.setText("Rendre mon profil visible aux recruteurs");
+        publishToggle.setTextColor(ink);
+        publishToggle.setTextSize(15);
+        publishToggle.setChecked(p.getBoolean("discoverable", false));
+        content.addView(publishToggle, new LinearLayout.LayoutParams(-1, dp(52)));
+        content.addView(text("Option désactivée par défaut. Si vous l’activez, seuls votre nom, ville, métier, formation, compétences et disponibilité seront visibles. Votre téléphone, e-mail, photo et CV ne seront pas publiés.", 12, muted, false));
+        space(content, 14);
+
         content.addView(button("Enregistrer mon profil sur ce téléphone", true, () -> {
             if (name.getText().toString().trim().isEmpty() || phone.getText().toString().trim().isEmpty()) {
                 Toast.makeText(this, "Le nom et le téléphone sont obligatoires.", Toast.LENGTH_LONG).show();
@@ -1688,11 +1698,13 @@ public class MainActivity extends Activity {
             String[] keys = {"name","phone","email","city","experience","education","skills","availability"};
             for (int i=0;i<fields.length;i++) e.putString(keys[i], fields[i].getText().toString().trim());
             e.putBoolean("profile_saved", true);
+            e.putBoolean("discoverable", publishToggle.isChecked());
             e.putLong("profile_updated_at", System.currentTimeMillis());
             boolean stored = e.commit();
             Toast.makeText(this, stored
                     ? "Profil et informations enregistrés sur cet appareil."
                     : "Erreur : le profil n'a pas pu être enregistré.", Toast.LENGTH_LONG).show();
+            if (stored) syncProfileToSupabase();
         }), new LinearLayout.LayoutParams(-1, dp(60)));
         space(content, 8);
         content.addView(text("Enregistrement local : vos informations sont conservées dans l'application et votre photo / CV sont copiés dans son espace privé. Ils restent disponibles après fermeture et redémarrage de l'application. Rien n'est envoyé ni publié.", 13, muted, false));
@@ -1710,6 +1722,78 @@ public class MainActivity extends Activity {
             }
         }
         if (savedCount == 0) content.addView(text("Aucune offre sauvegardée pour le moment.", 14, muted, false));
+    }
+
+    // Publish only explicitly approved professional profile fields to Supabase.
+    // Contact details, email, photo and CV remain private on this device.
+    private void syncProfileToSupabase() {
+        final SharedPreferences profile = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
+        final String token = authPrefs().getString("access_token", "");
+        final String userId = authPrefs().getString("user_id", "");
+        if (token.isEmpty() || userId.isEmpty()) {
+            Toast.makeText(this, "Connectez-vous à nouveau pour synchroniser votre profil.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        final JSONObject payload = new JSONObject();
+        try {
+            payload.put("user_id", userId);
+            payload.put("full_name", profile.getString("name", ""));
+            payload.put("city", profile.getString("city", ""));
+            payload.put("profession", profile.getString("experience", ""));
+            payload.put("education", profile.getString("education", ""));
+            payload.put("skills", profile.getString("skills", ""));
+            payload.put("availability", profile.getString("availability", ""));
+            payload.put("account_type", employerMode ? "employer" : "job_seeker");
+            payload.put("is_discoverable", profile.getBoolean("discoverable", false) && !employerMode);
+        } catch (Exception e) {
+            Toast.makeText(this, "Impossible de préparer la synchronisation du profil.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            try {
+                URL url = new URL(SUPABASE_URL + "/rest/v1/job_profiles?on_conflict=user_id");
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(20000);
+                connection.setDoOutput(true);
+                connection.setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY);
+                connection.setRequestProperty("Authorization", "Bearer " + token);
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                connection.setRequestProperty("Accept", "application/json");
+                connection.setRequestProperty("Prefer", "resolution=merge-duplicates,return=minimal");
+                byte[] body = payload.toString().getBytes("UTF-8");
+                try (OutputStream request = connection.getOutputStream()) {
+                    request.write(body);
+                    request.flush();
+                }
+                int status = connection.getResponseCode();
+                InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                if (stream != null) {
+                    byte[] buffer = new byte[4096];
+                    int count;
+                    while ((count = stream.read(buffer)) != -1) output.write(buffer, 0, count);
+                    stream.close();
+                }
+                String response = new String(output.toByteArray(), "UTF-8");
+                if (status < 200 || status >= 300) {
+                    throw new Exception("HTTP " + status + (response.isEmpty() ? "" : " — " + response));
+                }
+                runOnUiThread(() -> Toast.makeText(this,
+                        profile.getBoolean("discoverable", false) && !employerMode
+                                ? "Profil synchronisé. Il est visible par les recruteurs."
+                                : "Profil synchronisé en privé. Il n'est pas visible dans la recherche.",
+                        Toast.LENGTH_LONG).show());
+            } catch (Exception error) {
+                String message = error.getMessage() == null ? "Erreur réseau." : error.getMessage();
+                runOnUiThread(() -> Toast.makeText(this,
+                        "Synchronisation impossible : " + message, Toast.LENGTH_LONG).show());
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        }).start();
     }
 
     private void showOfficialJob(Job job) {
