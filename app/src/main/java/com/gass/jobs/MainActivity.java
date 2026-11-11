@@ -1472,13 +1472,13 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
         Uri selected = data.getData();
-        String storedName = requestCode == PICK_PROFILE_PHOTO ? "profile-photo" : "profile-cv";
+        String storedName = accountProfileFileName(requestCode == PICK_PROFILE_PHOTO ? "profile-photo" : "profile-cv");
         String copied = copyProfileFile(selected, storedName);
         if (copied.isEmpty()) {
             Toast.makeText(this, "Impossible d'enregistrer le fichier. Choisissez un autre document.", Toast.LENGTH_LONG).show();
             return;
         }
-        android.content.SharedPreferences.Editor edit = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
+        android.content.SharedPreferences.Editor edit = profilePrefs().edit();
         if (requestCode == PICK_PROFILE_PHOTO) edit.putString("photo_file", copied).remove("photo_uri");
         if (requestCode == PICK_PROFILE_CV) edit.putString("cv_file", copied).remove("cv_uri");
         if (!edit.commit()) {
@@ -1613,7 +1613,7 @@ public class MainActivity extends Activity {
         prepareScreen(true, this::showProfile);
         base("Votre carte candidat", "Un profil clair pour présenter votre parcours professionnel.", TAB_PROFILE, true);
 
-        android.content.SharedPreferences p = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
+        android.content.SharedPreferences p = profilePrefs();
         content.addView(text("Aperçu de votre profil", 20, ink, true));
         LinearLayout preview = column();
         preview.setPadding(dp(18), dp(18), dp(18), dp(18));
@@ -1622,7 +1622,7 @@ public class MainActivity extends Activity {
         ImageView previewPhoto = new ImageView(this);
         previewPhoto.setScaleType(ImageView.ScaleType.CENTER_CROP);
         previewPhoto.setBackground(shape(Color.rgb(65, 80, 94), 22));
-        Uri savedPhoto = savedProfileFileUri(p, "photo_file", "photo_uri", "profile-photo");
+        Uri savedPhoto = savedProfileFileUri(p, "photo_file", "photo_uri", accountProfileFileName("profile-photo"));
         if (savedPhoto != null) {
             previewPhoto.setImageURI(savedPhoto);
         } else {
@@ -1649,7 +1649,7 @@ public class MainActivity extends Activity {
         profilePhotoView = photo;
         photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
         photo.setBackground(shape(panel, 18));
-        Uri photoUri = savedProfileFileUri(p, "photo_file", "photo_uri", "profile-photo");
+        Uri photoUri = savedProfileFileUri(p, "photo_file", "photo_uri", accountProfileFileName("profile-photo"));
         if (photoUri != null) {
             photo.setImageURI(photoUri);
         } else {
@@ -1682,7 +1682,7 @@ public class MainActivity extends Activity {
             space(content, 10);
         }
 
-        Uri cvUri = savedProfileFileUri(p, "cv_file", "cv_uri", "profile-cv");
+        Uri cvUri = savedProfileFileUri(p, "cv_file", "cv_uri", accountProfileFileName("profile-cv"));
         profileCvLabel = text(cvUri == null ? "Aucun CV sélectionné" : "CV enregistré sur cet appareil", 14, muted, false);
         content.addView(profileCvLabel);
         space(content, 6);
@@ -1704,7 +1704,7 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "Le nom et le téléphone sont obligatoires.", Toast.LENGTH_LONG).show();
                 return;
             }
-            android.content.SharedPreferences.Editor e = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE).edit();
+            android.content.SharedPreferences.Editor e = profilePrefs().edit();
             String[] keys = {"name","phone","email","city","experience","education","skills","availability"};
             for (int i=0;i<fields.length;i++) e.putString(keys[i], fields[i].getText().toString().trim());
             e.putBoolean("profile_saved", true);
@@ -1741,7 +1741,7 @@ public class MainActivity extends Activity {
     // Publish only explicitly approved professional profile fields to Supabase.
     // Contact details, email, photo and CV remain private on this device.
     private void syncProfileToSupabase() {
-        final SharedPreferences profile = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
+        final SharedPreferences profile = profilePrefs();
         final String token = authPrefs().getString("access_token", "");
         final String userId = authPrefs().getString("user_id", "");
         if (token.isEmpty() || userId.isEmpty()) {
@@ -1814,55 +1814,54 @@ public class MainActivity extends Activity {
     }
 
 
-    // Restore private profile fields from the authenticated user's own Supabase row.
-    // Local-only photo and CV files are deliberately never overwritten or deleted here.
+    // Restore only the authenticated account's own private profile.
+    // Local preferences and photo/CV files are isolated per Supabase user ID.
     private void restoreProfileFromSupabase() {
-        if (!hasAuthSession() || authPrefs().getString("user_id", "").isEmpty()) return;
+        final String uid = authPrefs().getString("user_id", "").trim();
+        if (!hasAuthSession() || uid.isEmpty()) return;
         try {
-            String uid = authPrefs().getString("user_id", "");
             JSONArray savedRows = rows("job_profiles?select=full_name,phone,city,profession,education,skills,availability,account_type,is_discoverable&user_id=eq." + enc(uid) + "&limit=1");
-            SharedPreferences profile = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
+            String safeUid = uid.replaceAll("[^A-Za-z0-9_-]", "_");
+            SharedPreferences profile = getSharedPreferences("tun_jobs_profile_" + safeUid, MODE_PRIVATE);
+            SharedPreferences.Editor edit = profile.edit();
             if (savedRows.length() > 0) {
                 JSONObject remote = savedRows.getJSONObject(0);
-                SharedPreferences.Editor edit = profile.edit();
-                boolean hasRemoteData = false;
                 String[][] fields = {
                     {"full_name", "name"}, {"phone", "phone"}, {"city", "city"},
                     {"profession", "experience"}, {"education", "education"},
                     {"skills", "skills"}, {"availability", "availability"}
                 };
+                boolean hasRemoteData = false;
                 for (String[] field : fields) {
                     String value = remote.optString(field[0], "").trim();
-                    // Do not replace a useful local value with an empty cloud value.
-                    if (!value.isEmpty()) {
-                        edit.putString(field[1], value);
-                        hasRemoteData = true;
-                    }
+                    edit.putString(field[1], value);
+                    if (!value.isEmpty()) hasRemoteData = true;
                 }
-                if (hasRemoteData || profile.getBoolean("profile_saved", false)) {
-                    edit.putBoolean("profile_saved", true);
-                }
-                edit.putBoolean("discoverable", remote.optBoolean("is_discoverable", profile.getBoolean("discoverable", false)));
+                edit.putString("email", authPrefs().getString("email", ""));
+                edit.putBoolean("profile_saved", hasRemoteData);
+                edit.putBoolean("discoverable", remote.optBoolean("is_discoverable", false));
                 edit.putBoolean("cloud_profile_restored", true);
                 edit.commit();
-                String accountType = remote.optString("account_type", "");
-                if ("employer".equals(accountType)) employerMode = true;
+                employerMode = "employer".equals(remote.optString("account_type", ""));
             } else {
-                // First login on a fresh install: retain the name supplied at signup.
-                String signupName = authPrefs().getString("full_name", "").trim();
-                if (!signupName.isEmpty() && profile.getString("name", "").trim().isEmpty()) {
-                    profile.edit().putString("name", signupName).apply();
-                }
-                // If this device already has a completed profile, seed the cloud row once.
-                if (profile.getBoolean("profile_saved", false)) {
-                    runOnUiThread(this::syncProfileToSupabase);
-                }
+                // A new account starts clean; never copy another account's legacy profile.
+                edit.putString("name", authPrefs().getString("full_name", "").trim());
+                edit.putString("email", authPrefs().getString("email", ""));
+                edit.putString("phone", "");
+                edit.putString("city", "");
+                edit.putString("experience", "");
+                edit.putString("education", "");
+                edit.putString("skills", "");
+                edit.putString("availability", "");
+                edit.putBoolean("profile_saved", false);
+                edit.putBoolean("discoverable", false);
+                edit.putBoolean("cloud_profile_restored", true);
+                edit.commit();
             }
         } catch (Exception error) {
-            // A network failure must never clear or replace the on-device profile.
             String message = error.getMessage() == null ? "Réseau indisponible." : error.getMessage();
             runOnUiThread(() -> Toast.makeText(this,
-                    "Profil local conservé. Restauration cloud impossible : " + message,
+                    "Profil de ce compte conservé. Restauration cloud impossible : " + message,
                     Toast.LENGTH_LONG).show());
         }
     }
@@ -2086,10 +2085,11 @@ public class MainActivity extends Activity {
 
     private void clearEverything() {
         clearSavedItems();
-        String[] names = {"tun_jobs_profile", "gass_jobs_drafts", PREFS_EMPLOYER};
+        profilePrefs().edit().clear().apply();
+        String[] names = {"gass_jobs_drafts", PREFS_EMPLOYER};
         for (String name : names) getSharedPreferences(name, MODE_PRIVATE).edit().clear().apply();
-        new File(getFilesDir(), "profile-photo").delete();
-        new File(getFilesDir(), "profile-cv").delete();
+        new File(getFilesDir(), accountProfileFileName("profile-photo")).delete();
+        new File(getFilesDir(), accountProfileFileName("profile-cv")).delete();
         employerMode = false;
     }
 
@@ -2684,6 +2684,22 @@ public class MainActivity extends Activity {
     // ================================================================ Supabase authentication
     private SharedPreferences authPrefs() {
         return getSharedPreferences(PREFS_AUTH, MODE_PRIVATE);
+    }
+
+    // Isolate private profile data by the authenticated Supabase user ID.
+    // Never fall back to the legacy shared profile, which may belong to another person.
+    private SharedPreferences profilePrefs() {
+        String uid = authPrefs().getString("user_id", "").trim();
+        if (uid.isEmpty()) uid = "signed-out";
+        uid = uid.replaceAll("[^A-Za-z0-9_-]", "_");
+        return getSharedPreferences("tun_jobs_profile_" + uid, MODE_PRIVATE);
+    }
+
+    private String accountProfileFileName(String baseName) {
+        String uid = authPrefs().getString("user_id", "signed-out").trim();
+        uid = uid.replaceAll("[^A-Za-z0-9_-]", "_");
+        if (uid.isEmpty()) uid = "signed-out";
+        return baseName + "-" + uid;
     }
 
     private boolean hasAuthSession() {
