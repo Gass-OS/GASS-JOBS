@@ -1042,7 +1042,7 @@ public class MainActivity extends Activity {
             showEmployerVerificationStatus(p);
         } else if (employerMode) {
             space(content, 10);
-            content.addView(button("🔒 Consulter le CV sécurisé", false, () -> openPrivateCv(p)),
+            content.addView(button("🔒 Coordonnées & CV sécurisés", false, () -> showPrivateContactAndCv(p)),
                     new LinearLayout.LayoutParams(-1, dp(50)));
             content.addView(text("Accès réservé aux recruteurs vérifiés après un match réciproque.", 12, muted, false));
         }
@@ -2118,7 +2118,6 @@ public class MainActivity extends Activity {
             payload.put("full_name", profile.getString("name", ""));
             // phone is stored in the user's own RLS-protected row; it is never selected
             // by public discovery or matching queries.
-            payload.put("phone", profile.getString("phone", ""));
             payload.put("city", profile.getString("city", ""));
             payload.put("profession", profile.getString("experience", ""));
             payload.put("education", profile.getString("education", ""));
@@ -2129,7 +2128,6 @@ public class MainActivity extends Activity {
             payload.put("certifications", profile.getString("certifications", ""));
             payload.put("experience_years", profile.getString("experience_years", ""));
             payload.put("photo_url", profile.getString("photo_url", ""));
-            payload.put("cv_path", profile.getString("cv_path", ""));
             payload.put("account_type", employerMode ? "employer" : "job_seeker");
             payload.put("is_discoverable", profile.getBoolean("discoverable", false) && !employerMode);
         } catch (Exception e) {
@@ -2168,6 +2166,12 @@ public class MainActivity extends Activity {
                 if (status < 200 || status >= 300) {
                     throw new Exception("HTTP " + status + (response.isEmpty() ? "" : " — " + response));
                 }
+                JSONObject privatePayload = new JSONObject();
+                privatePayload.put("user_id", userId);
+                privatePayload.put("phone", profile.getString("phone", ""));
+                privatePayload.put("email", profile.getString("email", ""));
+                privatePayload.put("cv_path", profile.getString("cv_path", ""));
+                rest("POST", "job_profile_private?on_conflict=user_id", privatePayload);
                 runOnUiThread(() -> Toast.makeText(this,
                         profile.getBoolean("discoverable", false) && !employerMode
                                 ? "Profil synchronisé. Il est visible par les recruteurs."
@@ -2190,7 +2194,7 @@ public class MainActivity extends Activity {
         final String uid = authPrefs().getString("user_id", "").trim();
         if (!hasAuthSession() || uid.isEmpty()) return;
         try {
-            JSONArray savedRows = rows("job_profiles?select=full_name,phone,city,profession,education,skills,availability,bio,languages,certifications,experience_years,photo_url,cv_path,account_type,is_discoverable&user_id=eq." + enc(uid) + "&limit=1");
+            JSONArray savedRows = rows("job_profiles?select=full_name,city,profession,education,skills,availability,bio,languages,certifications,experience_years,photo_url,account_type,is_discoverable&user_id=eq." + enc(uid) + "&limit=1");
             String safeUid = uid.replaceAll("[^A-Za-z0-9_-]", "_");
             SharedPreferences profile = getSharedPreferences("tun_jobs_profile_" + safeUid, MODE_PRIVATE);
             SharedPreferences.Editor edit = profile.edit();
@@ -2209,9 +2213,18 @@ public class MainActivity extends Activity {
                     edit.putString(field[1], value);
                     if (!value.isEmpty()) hasRemoteData = true;
                 }
-                edit.putString("email", authPrefs().getString("email", ""));
                 edit.putString("photo_url", remote.optString("photo_url", ""));
-                edit.putString("cv_path", remote.optString("cv_path", ""));
+                try {
+                    JSONArray privateRows = rows("job_profile_private?select=phone,email,cv_path&user_id=eq." + enc(uid) + "&limit=1");
+                    if (privateRows.length() > 0) {
+                        JSONObject privateData = privateRows.getJSONObject(0);
+                        edit.putString("phone", privateData.optString("phone", ""));
+                        edit.putString("email", privateData.optString("email", authPrefs().getString("email", "")));
+                        edit.putString("cv_path", privateData.optString("cv_path", ""));
+                    } else edit.putString("email", authPrefs().getString("email", ""));
+                } catch (Exception privateError) {
+                    edit.putString("email", authPrefs().getString("email", ""));
+                }
                 edit.putBoolean("profile_saved", hasRemoteData);
                 edit.putBoolean("discoverable", remote.optBoolean("is_discoverable", false));
                 edit.putBoolean("cloud_profile_restored", true);
@@ -2259,12 +2272,39 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    private void showPrivateContactAndCv(RealProfile p) {
+        new Thread(() -> {
+            try {
+                JSONArray rows = rows("job_profile_private?select=phone,email,cv_path&user_id=eq." + enc(p.id) + "&limit=1");
+                if (rows.length() == 0) throw new Exception("Aucune coordonnée partagée.");
+                JSONObject data = rows.getJSONObject(0);
+                String phone = data.optString("phone", "");
+                String email = data.optString("email", "");
+                String cv = data.optString("cv_path", "");
+                runOnUiThread(() -> {
+                    LinearLayout details = column();
+                    details.setPadding(dp(18), dp(12), dp(18), dp(12));
+                    details.addView(text("Téléphone : " + (phone.isEmpty() ? "Non renseigné" : phone), 16, ink, false));
+                    details.addView(text("E-mail : " + (email.isEmpty() ? "Non renseigné" : email), 16, ink, false));
+                    details.addView(text(cv.isEmpty() ? "Aucun CV partagé." : "CV disponible dans le coffre privé.", 14, muted, false));
+                    AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Coordonnées privées").setView(details)
+                            .setNegativeButton("Fermer", null)
+                            .setPositiveButton(cv.isEmpty() ? "OK" : "Ouvrir le CV", (d, w) -> { if (!cv.isEmpty()) openPrivateCv(p); }).create();
+                    dialog.show();
+                });
+            } catch (Exception e) {
+                String message = e.getMessage() == null ? "Accès refusé." : e.getMessage();
+                runOnUiThread(() -> Toast.makeText(this, "Accès réservé aux recruteurs vérifiés après un match : " + message, Toast.LENGTH_LONG).show());
+            }
+        }).start();
+    }
+
     private void openPrivateCv(RealProfile p) {
         new Thread(() -> {
             HttpURLConnection c = null;
             try {
                 String token = authPrefs().getString("access_token", "");
-                URL url = new URL(SUPABASE_URL + "/rest/v1/job_profiles?select=cv_path&user_id=eq." + enc(p.id) + "&limit=1");
+                URL url = new URL(SUPABASE_URL + "/rest/v1/job_profile_private?select=cv_path&user_id=eq." + enc(p.id) + "&limit=1");
                 c = (HttpURLConnection) url.openConnection();
                 c.setRequestMethod("GET"); c.setConnectTimeout(12000); c.setReadTimeout(15000);
                 c.setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY);
