@@ -122,12 +122,12 @@ public class CallActivity extends Activity {
 
     private void initializePeer(JSONArray iceJson){
         try{
-            if(video){egl=EglBase.create();remoteView.init(egl.getEglBaseContext(),null);remoteView.setMirror(false);localView.init(egl.getEglBaseContext(),null);localView.setMirror(true);}
+            egl=EglBase.create();\n            if(video){remoteView.init(egl.getEglBaseContext(),null);remoteView.setMirror(false);localView.init(egl.getEglBaseContext(),null);localView.setMirror(true);}
             PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(this).createInitializationOptions());
             PeerConnectionFactory.Options options=new PeerConnectionFactory.Options();
             factory=PeerConnectionFactory.builder().setOptions(options)
                 .setVideoEncoderFactory(new DefaultVideoEncoderFactory(egl.getEglBaseContext(),true,true))
-                .setVideoDecoderFactory(new DefaultVideoDecoderFactory(egl==null?EglBase.create().getEglBaseContext():egl.getEglBaseContext())).createPeerConnectionFactory();
+                .setVideoDecoderFactory(new DefaultVideoDecoderFactory(egl.getEglBaseContext())).createPeerConnectionFactory();
             List<PeerConnection.IceServer> servers=new ArrayList<>();
             for(int i=0;i<iceJson.length();i++){JSONObject x=iceJson.getJSONObject(i);JSONArray urls=x.optJSONArray("urls");if(urls==null)continue;ArrayList<String> values=new ArrayList<>();for(int j=0;j<urls.length();j++)values.add(urls.optString(j));if(values.isEmpty())continue;PeerConnection.IceServer.Builder b=PeerConnection.IceServer.builder(values);if(x.has("username"))b.setUsername(x.optString("username"));if(x.has("credential"))b.setPassword(x.optString("credential"));servers.add(b.createIceServer());}
             PeerConnection.RTCConfiguration config=new PeerConnection.RTCConfiguration(servers);
