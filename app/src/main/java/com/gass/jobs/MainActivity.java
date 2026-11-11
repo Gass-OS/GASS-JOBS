@@ -1519,6 +1519,10 @@ public class MainActivity extends Activity {
         LinearLayout banner = column(); banner.setPadding(dp(20), dp(22), dp(20), dp(22)); banner.setBackground(shape(Color.rgb(24, 26, 31), 18));
         banner.addView(text("TUN-JOBS", 25, Color.WHITE, true)); space(banner, 6); banner.addView(text("EMPLOI • RECRUTEMENT • TUNISIE", 13, gold, true));
         space(banner, 8); banner.addView(text("GASS-OS  •  BY AYMEN GHARSALLI", 13, Color.WHITE, false)); content.addView(banner); space(content, 16);
+        menuCard("📻", "Radio en ligne", "Stations en direct • Tunisie, Europe et monde",
+                () -> startActivity(new Intent(this, RadioActivity.class)));
+        menuCard("📺", "Télévision en direct", "Chaînes publiques • pays et catégories",
+                () -> startActivity(new Intent(this, TvActivity.class)));
         menuCard("🌐", "Langue / Language", "Français • English • العربية", this::chooseLanguage);
         menuCard("⚙️", "Paramètres", "Apparence, région, compte et confidentialité", this::showSettings);
         menuCard("💡", "Conseils et aide", "Guides et assistance", this::showTips);
@@ -1571,15 +1575,6 @@ public class MainActivity extends Activity {
         space(content, 8);
         content.addView(button("⚙️  Préférences des notifications", false, this::showNotificationPreferences),
                 new LinearLayout.LayoutParams(-1, dp(58)));
-        space(content, 14);
-
-        sectionTitle("Radio & télévision");
-        content.addView(mediaSettingCard("📻", "Radio en ligne", "Stations en direct • Tunisie, Europe et monde",
-                () -> startActivity(new Intent(this, RadioActivity.class))));
-        space(content, 9);
-        content.addView(mediaSettingCard("📺", "Télévision en direct", "Chaînes publiques • pays et catégories",
-                () -> startActivity(new Intent(this, TvActivity.class))));
-        content.addView(text("Lecture intégrée avec le lecteur multimédia Android. Certains flux peuvent être indisponibles selon le diffuseur.", 12, muted, false));
         space(content, 14);
 
         sectionTitle("Cartes et aide");
