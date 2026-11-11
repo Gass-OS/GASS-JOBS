@@ -975,7 +975,7 @@ public class MainActivity extends Activity {
         LinearLayout switcher = row();
         switcher.setBackground(shape(Color.rgb(22, 24, 30), 28));
         switcher.setPadding(dp(4), dp(4), dp(4), dp(4));
-        switcher.addView(explain(segment("♙  Cherche un emploi", !employerMode, () -> { employerMode = false; showHome(); }),
+        switcher.addView(explain(segment("♙  Cherche un emploi", !employerMode, () -> { employerMode = false; syncProfileToSupabase(); showHome(); }),
                 "Cherche un emploi", "Affiche les offres d'emploi sous forme de cartes à faire glisser."),
                 new LinearLayout.LayoutParams(0, dp(44), 1));
         switcher.addView(explain(segment("▣  Propose un emploi", employerMode, this::chooseEmployerMode),
@@ -2357,6 +2357,7 @@ public class MainActivity extends Activity {
     private void chooseEmployerMode() {
         requireEmployerProfile(() -> {
             employerMode = true;
+            syncProfileToSupabase();
             showHome();
         });
     }
