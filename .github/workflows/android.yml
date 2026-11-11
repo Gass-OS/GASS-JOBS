@@ -2,7 +2,7 @@ name: GASS-JOBS Android APK
 
 on:
   push:
-    branches: [main, feature/android-mvp, integration/official-directory-into-mvp-20261109, feature/webrtc-calls-20261111, feature/chat-profile-ui-20261111]
+    branches: [main, feature/android-mvp, integration/official-directory-into-mvp-20261109, feature/webrtc-calls-20261111, feature/chat-profile-ui-20261111, feature/chat-profile-ui-20261111]
   workflow_dispatch:
 
 permissions:
