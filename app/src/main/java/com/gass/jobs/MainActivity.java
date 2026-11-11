@@ -660,7 +660,7 @@ public class MainActivity extends Activity {
         card.addView(counterView, counterParams);
 
         LinearLayout info = column();
-        info.setPadding(dp(18), dp(80), dp(18), dp(18));
+        info.setPadding(dp(18), dp(art != null ? 22 : 80), dp(18), dp(18));
         info.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[] {Color.argb(0, 0, 0, 0), Color.argb(215, 0, 0, 0), Color.argb(245, 0, 0, 0)}));
         info.addView(text(title, 26, Color.WHITE, true));
@@ -998,7 +998,7 @@ public class MainActivity extends Activity {
         space(content, 8);
 
         deckHolder = new FrameLayout(this);
-        content.addView(deckHolder, new LinearLayout.LayoutParams(-1, 0, 1));
+        content.addView(deckHolder, new LinearLayout.LayoutParams(-1, dp(employerMode ? 590 : 470)));
         space(content, 6);
 
         actionBar = row();
@@ -1920,8 +1920,131 @@ public class MainActivity extends Activity {
     private void loadIncomingLikes(){prepareScreen(false,this::loadIncomingLikes);base("Likes reçus","Recruteurs intéressés par votre profil.",TAB_PROFILE,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{JSONArray likes=rows("job_swipes?select=actor_id&target_id=eq."+enc(me())+"&decision=eq.like&order=created_at.desc");ArrayList<String> ids=new ArrayList<>();for(int i=0;i<likes.length();i++){String id=likes.getJSONObject(i).optString("actor_id","");if(!id.isEmpty()&&!ids.contains(id))ids.add(id);}JSONArray ps=new JSONArray();if(!ids.isEmpty()){StringBuilder in=new StringBuilder();for(String id:ids){if(in.length()>0)in.append(",");in.append(id);}ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability&user_id=in.("+in+")");}ArrayList<RealProfile> people=new ArrayList<>();for(int i=0;i<ps.length();i++)people.add(new RealProfile(ps.getJSONObject(i)));runOnUiThread(()->{status.setVisibility(View.GONE);if(people.isEmpty())content.addView(text("Aucun like reçu. Activez la visibilité de votre profil.",14,muted,false));for(RealProfile p:people){LinearLayout c=column();c.setPadding(dp(15),dp(14),dp(15),dp(14));c.setBackground(shape(panel,18));c.addView(text(p.name,19,ink,true));c.addView(text(p.profession+" • "+p.city,14,gold,true));space(c,8);c.addView(button("♥ Aimer en retour",true,()->swipeReal(p.id,"like",c)));content.addView(c);space(content,8);}content.addView(button("Mes matches",false,this::loadMyMatches));content.addView(button("Actualiser",false,this::loadIncomingLikes));});}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->status.setText("Erreur : "+m));}}).start();}
     private void loadMyMatches(){prepareScreen(false,this::loadMyMatches);base("Mes matches","Les conversations s'ouvrent après un like réciproque.",employerMode?TAB_EMPLOYERS:TAB_PROFILE,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{String uid=me();JSONArray ms=rows("job_matches?select=id,user_a,user_b&or=(user_a.eq."+enc(uid)+",user_b.eq."+enc(uid)+")&order=created_at.desc");ArrayList<String> ids=new ArrayList<>(),mids=new ArrayList<>();for(int i=0;i<ms.length();i++){JSONObject x=ms.getJSONObject(i);mids.add(x.optString("id",""));ids.add(x.optString("user_a","").equals(uid)?x.optString("user_b",""):x.optString("user_a",""));}JSONArray ps=new JSONArray();if(!ids.isEmpty()){StringBuilder in=new StringBuilder();for(String id:ids){if(in.length()>0)in.append(",");in.append(id);}ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability&user_id=in.("+in+")");}java.util.HashMap<String,RealProfile> map=new java.util.HashMap<>();for(int i=0;i<ps.length();i++){RealProfile p=new RealProfile(ps.getJSONObject(i));map.put(p.id,p);}ArrayList<RealProfile> people=new ArrayList<>();ArrayList<String> matchedIds=new ArrayList<>();for(int i=0;i<ids.size();i++)if(map.containsKey(ids.get(i))){people.add(map.get(ids.get(i)));matchedIds.add(mids.get(i));}runOnUiThread(()->{status.setVisibility(View.GONE);if(people.isEmpty())content.addView(text("Pas encore de match.",14,muted,false));for(int i=0;i<people.size();i++){RealProfile p=people.get(i);String mid=matchedIds.get(i);LinearLayout c=column();c.setPadding(dp(15),dp(14),dp(15),dp(14));c.setBackground(shape(panel,18));c.addView(text("♥ "+p.name,19,ink,true));c.addView(text(p.profession+" • "+p.city,13,muted,false));space(c,8);c.addView(button("Ouvrir la conversation",true,()->openMatchedChat(mid,p)));content.addView(c);space(content,8);}content.addView(button("Actualiser",false,this::loadMyMatches));});}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->status.setText("Erreur : "+m));}}).start();}
     private void openMatchedChat(String matchId,RealProfile other){new Thread(()->{try{JSONArray c=rows("job_conversations?select=id&match_id=eq."+enc(matchId)+"&limit=1");if(c.length()==0)throw new Exception("Conversation indisponible.");String id=c.getJSONObject(0).optString("id","");runOnUiThread(()->showPrivateChat(id,matchId,other));}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->Toast.makeText(this,m,Toast.LENGTH_LONG).show());}}).start();}
-    private void showPrivateChat(String id,String matchId,RealProfile other){prepareScreen(false,()->showPrivateChat(id,matchId,other));base("Discussion • "+other.name,"Messagerie privée après match réciproque.",-1,true);LinearLayout callActions=row();callActions.addView(button("☎ Appel vocal",true,()->startMatchedCall(matchId,other,false)),new LinearLayout.LayoutParams(0,dp(48),1));hspace(callActions,8);callActions.addView(button("▣ Vidéo",true,()->startMatchedCall(matchId,other,true)),new LinearLayout.LayoutParams(0,dp(48),1));content.addView(callActions);space(content,6);content.addView(button("Vérifier les appels entrants",false,()->checkIncomingMatchedCall(matchId,other)));LinearLayout messages=column();content.addView(messages);EditText input=new EditText(this);input.setHint("Écrire un message...");input.setTextColor(ink);input.setHintTextColor(muted);input.setPadding(dp(14),dp(10),dp(14),dp(10));input.setBackground(shape(panel,16));content.addView(input,new LinearLayout.LayoutParams(-1,dp(54)));LinearLayout a=row();a.addView(button("Envoyer",true,()->{String value=input.getText().toString().trim();if(value.isEmpty())return;try{JSONObject b=new JSONObject();b.put("conversation_id",id);b.put("sender_id",me());b.put("body",value);new Thread(()->{try{rest("POST","job_messages",b);runOnUiThread(()->{input.setText("");refreshPrivateChat(id,messages);});}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->Toast.makeText(this,m,Toast.LENGTH_LONG).show());}}).start();}catch(Exception e){Toast.makeText(this,"Message invalide.",Toast.LENGTH_SHORT).show();}}),new LinearLayout.LayoutParams(0,dp(48),1));hspace(a,8);a.addView(button("Actualiser",false,()->refreshPrivateChat(id,messages)),new LinearLayout.LayoutParams(0,dp(48),1));content.addView(a);refreshPrivateChat(id,messages);}
-    private void refreshPrivateChat(String id,LinearLayout box){new Thread(()->{try{JSONArray rs=rows("job_messages?select=sender_id,body,created_at&conversation_id=eq."+enc(id)+"&order=created_at.asc&limit=200");runOnUiThread(()->{box.removeAllViews();for(int i=0;i<rs.length();i++){JSONObject x=rs.optJSONObject(i);if(x==null)continue;boolean mine=x.optString("sender_id","").equals(me());LinearLayout b=column();b.setPadding(dp(12),dp(9),dp(12),dp(9));b.setBackground(shape(mine?Color.rgb(83,62,24):Color.rgb(42,45,53),15));b.addView(text(x.optString("body",""),14,Color.WHITE,false));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.leftMargin=dp(mine?42:0);lp.rightMargin=dp(mine?0:42);lp.bottomMargin=dp(7);box.addView(b,lp);}});}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->Toast.makeText(this,m,Toast.LENGTH_LONG).show());}}).start();}
+    private void showPrivateChat(String id,String matchId,RealProfile other){
+        prepareScreen(false,()->showPrivateChat(id,matchId,other));
+        getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                | android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+        base("Discussion • "+other.name,"Messagerie privée après match réciproque.",-1,true);
+
+        LinearLayout callActions=row();
+        callActions.addView(button("☎ Appel vocal",true,()->startMatchedCall(matchId,other,false)),
+                new LinearLayout.LayoutParams(0,dp(50),1));
+        hspace(callActions,8);
+        callActions.addView(button("▣ Vidéo",true,()->startMatchedCall(matchId,other,true)),
+                new LinearLayout.LayoutParams(0,dp(50),1));
+        content.addView(callActions);
+        space(content,8);
+        content.addView(button("Vérifier les appels entrants",false,()->checkIncomingMatchedCall(matchId,other)),
+                new LinearLayout.LayoutParams(-1,dp(48)));
+        space(content,12);
+
+        TextView section=text("MESSAGES",13,gold,true);
+        content.addView(section);
+        space(content,6);
+
+        LinearLayout messages=column();
+        messages.setPadding(dp(10),dp(12),dp(10),dp(12));
+        ScrollView history=new ScrollView(this);
+        history.setFillViewport(true);
+        history.setNestedScrollingEnabled(true);
+        history.setBackground(shape(Color.rgb(17,19,24),20));
+        history.addView(messages,new ScrollView.LayoutParams(-1,-2));
+        content.addView(history,new LinearLayout.LayoutParams(-1,dp(360)));
+        space(content,12);
+
+        TextView writeLabel=text("Votre message",14,ink,true);
+        content.addView(writeLabel);
+        space(content,5);
+        EditText input=new EditText(this);
+        input.setHint("Écrivez votre message ici…");
+        input.setTextColor(ink);
+        input.setHintTextColor(muted);
+        input.setTextSize(17);
+        input.setSingleLine(false);
+        input.setMinLines(3);
+        input.setMaxLines(5);
+        input.setGravity(Gravity.TOP|Gravity.START);
+        input.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                |InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        input.setPadding(dp(16),dp(14),dp(16),dp(14));
+        input.setBackground(shape(panel,18));
+        content.addView(input,new LinearLayout.LayoutParams(-1,dp(116)));
+        space(content,8);
+
+        LinearLayout actions=row();
+        actions.addView(button("➤  Envoyer le message",true,()->{
+            String value=input.getText().toString().trim();
+            if(value.isEmpty()){input.setError("Écrivez un message avant l'envoi.");return;}
+            try{
+                JSONObject b=new JSONObject();
+                b.put("conversation_id",id);
+                b.put("sender_id",me());
+                b.put("body",value);
+                new Thread(()->{
+                    try{
+                        rest("POST","job_messages",b);
+                        runOnUiThread(()->{input.setText("");refreshPrivateChat(id,messages,history);});
+                    }catch(Exception e){
+                        String m=e.getMessage()==null?"Erreur":e.getMessage();
+                        runOnUiThread(()->Toast.makeText(this,m,Toast.LENGTH_LONG).show());
+                    }
+                }).start();
+            }catch(Exception e){Toast.makeText(this,"Message invalide.",Toast.LENGTH_SHORT).show();}
+        }),new LinearLayout.LayoutParams(0,dp(56),1));
+        hspace(actions,8);
+        actions.addView(button("↻",false,()->refreshPrivateChat(id,messages,history)),
+                new LinearLayout.LayoutParams(dp(58),dp(56)));
+        content.addView(actions);
+        refreshPrivateChat(id,messages,history);
+    }
+
+    private void refreshPrivateChat(String id,LinearLayout box,ScrollView history){
+        new Thread(()->{
+            try{
+                JSONArray rs=rows("job_messages?select=sender_id,body,created_at&conversation_id=eq."+enc(id)
+                        +"&order=created_at.asc&limit=200");
+                runOnUiThread(()->{
+                    box.removeAllViews();
+                    if(rs.length()==0){
+                        TextView empty=text("Votre conversation commence ici.\nEnvoyez le premier message 👋",16,muted,false);
+                        empty.setGravity(Gravity.CENTER);
+                        empty.setPadding(dp(18),dp(30),dp(18),dp(30));
+                        box.addView(empty,new LinearLayout.LayoutParams(-1,-2));
+                    }
+                    for(int i=0;i<rs.length();i++){
+                        JSONObject x=rs.optJSONObject(i);
+                        if(x==null)continue;
+                        boolean mine=x.optString("sender_id","").equals(me());
+                        LinearLayout line=row();
+                        line.setGravity(mine?Gravity.END:Gravity.START);
+                        LinearLayout bubble=column();
+                        bubble.setPadding(dp(16),dp(12),dp(16),dp(10));
+                        bubble.setBackground(shape(mine?Color.rgb(103,73,23):Color.rgb(43,47,57),18));
+                        TextView body=text(x.optString("body",""),16,Color.WHITE,false);
+                        body.setMaxWidth(dp(285));
+                        body.setLineSpacing(dp(3),1.04f);
+                        bubble.addView(body);
+                        TextView stamp=text(mine?"Vous":"Message reçu",11,
+                                Color.rgb(205,208,216),false);
+                        stamp.setGravity(mine?Gravity.END:Gravity.START);
+                        LinearLayout.LayoutParams stampParams=new LinearLayout.LayoutParams(-1,-2);
+                        stampParams.topMargin=dp(5);
+                        bubble.addView(stamp,stampParams);
+                        LinearLayout.LayoutParams bubbleParams=new LinearLayout.LayoutParams(-2,-2);
+                        bubbleParams.leftMargin=dp(mine?42:0);
+                        bubbleParams.rightMargin=dp(mine?0:42);
+                        bubbleParams.bottomMargin=dp(9);
+                        line.addView(bubble,bubbleParams);
+                        box.addView(line,new LinearLayout.LayoutParams(-1,-2));
+                    }
+                    history.post(()->history.fullScroll(View.FOCUS_DOWN));
+                });
+            }catch(Exception e){
+                String m=e.getMessage()==null?"Erreur":e.getMessage();
+                runOnUiThread(()->Toast.makeText(this,m,Toast.LENGTH_LONG).show());
+            }
+        }).start();
+    }
 
     private void startMatchedCall(String matchId,RealProfile other,boolean video){
         Intent i=new Intent(this,CallActivity.class);
