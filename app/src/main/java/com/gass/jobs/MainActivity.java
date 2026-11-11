@@ -939,8 +939,13 @@ public class MainActivity extends Activity {
     }
 
     private void showRealProfileDetails(RealProfile p) {
-        prepareScreen(false, () -> showRealProfileDetails(p));
-        base("Profil candidat", "Informations publiques partagées avec les recruteurs.");
+        showRealProfileDetails(p, this::loadRealCandidates);
+    }
+
+    private void showRealProfileDetails(RealProfile p, Runnable backAction) {
+        prepareScreen(false, () -> showRealProfileDetails(p, backAction));
+        base(p.isEmployer() ? "Profil recruteur" : "Profil candidat",
+                "Informations publiques partagées avec les membres de TUN-JOBS.");
         TextView avatar = text(p.name == null || p.name.isEmpty() ? "?" :
                 p.name.substring(0, 1).toUpperCase(Locale.ROOT), 64, Color.WHITE, true);
         avatar.setGravity(Gravity.CENTER);
@@ -949,45 +954,89 @@ public class MainActivity extends Activity {
         space(content, 16);
         content.addView(text(p.name, 27, ink, true));
         space(content, 4);
-        content.addView(text(p.profession, 17, gold, true));
+        content.addView(text(p.isEmployer() ? "🏢  RECRUTEUR / EMPLOYEUR" : "👤  CANDIDAT EN RECHERCHE", 13, gold, true));
+        if (!p.profession.isEmpty()) {
+            space(content, 5);
+            content.addView(text(p.profession, 17, ink, true));
+        }
         space(content, 8);
-        content.addView(text("📍  " + p.city, 14, muted, false));
+        content.addView(text("📍  " + (p.city.isEmpty() ? "Localisation non renseignée" : p.city), 14, muted, false));
         space(content, 18);
-        detailLine("🎓", "FORMATION", p.education);
-        detailLine("🧩", "COMPÉTENCES", p.skills);
-        detailLine("🟢", "DISPONIBILITÉ", p.availability);
+        if (!p.isEmployer()) {
+            detailLine("🎓", "FORMATION", p.education);
+            detailLine("🧩", "COMPÉTENCES", p.skills);
+            detailLine("🟢", "DISPONIBILITÉ", p.availability);
+            detailLine("💼", "MÉTIER / EXPÉRIENCE", p.profession);
+        } else {
+            sectionTitle("Présentation du recruteur");
+            content.addView(text("Ce compte est enregistré comme recruteur. Les coordonnées privées ne sont jamais affichées dans cette fiche. Les offres publiées associées à ce compte apparaissent ci-dessous lorsqu'elles sont disponibles.", 14, muted, false));
+            space(content, 12);
+            sectionTitle("Offres publiées par ce recruteur");
+            TextView offerStatus = text("Chargement des offres publiques…", 13, muted, false);
+            content.addView(offerStatus);
+            new Thread(() -> {
+                try {
+                    JSONArray offers = rows("job_offers?select=id,title,company,governorate,sector,contract,salary,description&owner_id=eq."
+                            + enc(p.id) + "&status=eq.published&order=created_at.desc&limit=20");
+                    runOnUiThread(() -> {
+                        offerStatus.setVisibility(View.GONE);
+                        if (offers.length() == 0) content.addView(text("Aucune offre publique active pour le moment.", 13, muted, false));
+                        for (int i = 0; i < offers.length(); i++) {
+                            JSONObject o = offers.optJSONObject(i);
+                            if (o == null) continue;
+                            LinearLayout card = column();
+                            card.setPadding(dp(14), dp(13), dp(14), dp(13));
+                            card.setBackground(shape(panel, 16));
+                            card.addView(text(o.optString("title", "Offre d'emploi"), 16, ink, true));
+                            space(card, 4);
+                            card.addView(text(o.optString("company", p.name) + " • " + o.optString("governorate", p.city), 13, gold, false));
+                            String meta = o.optString("sector", "") + " • " + o.optString("contract", "");
+                            if (!o.optString("salary", "").isEmpty()) meta += " • " + o.optString("salary", "");
+                            space(card, 5);
+                            card.addView(text(meta, 12, muted, false));
+                            space(content, 8);
+                            content.addView(card);
+                        }
+                    });
+                } catch (Exception e) {
+                    String message = e.getMessage() == null ? "Offres indisponibles." : e.getMessage();
+                    runOnUiThread(() -> offerStatus.setText("Impossible de charger les offres : " + message));
+                }
+            }).start();
+        }
         LinearLayout privacy = column();
         privacy.setPadding(dp(16), dp(14), dp(16), dp(14));
         privacy.setBackground(shape(panel, 17));
         privacy.addView(text("🔒  Respect de la confidentialité", 15, gold, true));
         space(privacy, 5);
-        privacy.addView(text("Seules les informations publiques choisies par le candidat sont affichées ici. Le téléphone, l'adresse e-mail et le CV ne sont pas exposés dans cette fiche. La photo n'est pas encore fournie par le flux public des profils.", 13, muted, false));
+        privacy.addView(text("Seules les informations publiques du profil sont affichées. Le téléphone, l'adresse e-mail et le CV ne sont pas exposés dans cette fiche.", 13, muted, false));
         content.addView(privacy);
         space(content, 14);
-        content.addView(button("♥  J'aime ce profil", true, () -> {
-            try {
-                JSONObject body = new JSONObject();
-                body.put("actor_id", me());
-                body.put("target_id", p.id);
-                body.put("decision", "like");
-                new Thread(() -> {
-                    try {
-                        rest("POST", "job_swipes", body);
-                        runOnUiThread(() -> Toast.makeText(this, "Like envoyé. Match si le like est réciproque.", Toast.LENGTH_LONG).show());
-                    } catch (Exception e) {
-                        String message = e.getMessage() == null ? "Action impossible." : e.getMessage();
-                        runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
-                    }
-                }).start();
-            } catch (Exception e) {
-                Toast.makeText(this, "Action impossible.", Toast.LENGTH_SHORT).show();
-            }
-        }), new LinearLayout.LayoutParams(-1, dp(54)));
-        space(content, 8);
-        content.addView(button("Retour aux candidats", false, this::loadRealCandidates),
+        if (!p.isEmployer()) {
+            content.addView(button("♥  J'aime ce profil", true, () -> {
+                try {
+                    JSONObject body = new JSONObject();
+                    body.put("actor_id", me());
+                    body.put("target_id", p.id);
+                    body.put("decision", "like");
+                    new Thread(() -> {
+                        try {
+                            rest("POST", "job_swipes", body);
+                            runOnUiThread(() -> Toast.makeText(this, "Like envoyé. Match si le like est réciproque.", Toast.LENGTH_LONG).show());
+                        } catch (Exception e) {
+                            String message = e.getMessage() == null ? "Action impossible." : e.getMessage();
+                            runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                        }
+                    }).start();
+                } catch (Exception e) {
+                    Toast.makeText(this, "Action impossible.", Toast.LENGTH_SHORT).show();
+                }
+            }), new LinearLayout.LayoutParams(-1, dp(54)));
+            space(content, 8);
+        }
+        content.addView(button("Retour", false, backAction),
                 new LinearLayout.LayoutParams(-1, dp(52)));
     }
-
     private void showCandidateDialog(Candidate c) {
         showCandidateDetails(c);
     }
@@ -2089,15 +2138,15 @@ public class MainActivity extends Activity {
     }
 
     // Real profiles only: demo cards never enter these matching or chat endpoints.
-    private static class RealProfile {String id,name,city,profession,education,skills,availability;RealProfile(JSONObject j){id=j.optString("user_id","");name=j.optString("full_name","Candidat");city=j.optString("city","");profession=j.optString("profession","");education=j.optString("education","");skills=j.optString("skills","");availability=j.optString("availability","");}}
+    private static class RealProfile {String id,name,city,profession,education,skills,availability,accountType;RealProfile(JSONObject j){id=j.optString("user_id","");name=j.optString("full_name","Utilisateur");city=j.optString("city","");profession=j.optString("profession","");education=j.optString("education","");skills=j.optString("skills","");availability=j.optString("availability","");accountType=j.optString("account_type","job_seeker");} boolean isEmployer(){return "employer".equals(accountType);}}
     private String me(){return authPrefs().getString("user_id","");}
     private String rest(String method,String path,JSONObject body)throws Exception{String token=authPrefs().getString("access_token","");if(token.isEmpty()||me().isEmpty())throw new Exception("Connectez-vous pour continuer.");HttpURLConnection c=(HttpURLConnection)new URL(SUPABASE_URL+"/rest/v1/"+path).openConnection();try{c.setRequestMethod(method);c.setConnectTimeout(15000);c.setReadTimeout(20000);c.setRequestProperty("apikey",SUPABASE_PUBLISHABLE_KEY);c.setRequestProperty("Authorization","Bearer "+token);c.setRequestProperty("Accept","application/json");if(body!=null){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");c.setRequestProperty("Prefer","return=minimal");try(OutputStream o=c.getOutputStream()){o.write(body.toString().getBytes("UTF-8"));}}int code=c.getResponseCode();InputStream in=code>=400?c.getErrorStream():c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream();if(in!=null){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);in.close();}String value=new String(out.toByteArray(),"UTF-8");if(code<200||code>=300)throw new Exception("HTTP "+code+" "+value);return value;}finally{c.disconnect();}}
     private JSONArray rows(String path)throws Exception{String x=rest("GET",path,null);return x.isEmpty()?new JSONArray():new JSONArray(x);}
     private String enc(String x){try{return java.net.URLEncoder.encode(x,"UTF-8");}catch(Exception e){return x;}}
-    private void loadRealCandidates(){prepareScreen(false,this::loadRealCandidates);base("Candidats inscrits","Profils réels • visibilité activée volontairement.",TAB_EMPLOYERS,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{String uid=me();JSONArray ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability&account_type=eq.job_seeker&is_discoverable=eq.true&user_id=neq."+enc(uid)+"&order=updated_at.desc&limit=60");JSONArray sw=rows("job_swipes?select=target_id&actor_id=eq."+enc(uid));Set<String> done=new HashSet<>();for(int i=0;i<sw.length();i++)done.add(sw.getJSONObject(i).optString("target_id",""));ArrayList<RealProfile> list=new ArrayList<>();for(int i=0;i<ps.length();i++){RealProfile p=new RealProfile(ps.getJSONObject(i));if(!done.contains(p.id))list.add(p);}runOnUiThread(()->{status.setVisibility(View.GONE);content.addView(text(list.size()+" profil(s) réel(s)",17,gold,true));space(content,8);if(list.isEmpty())content.addView(text("Aucun nouveau profil visible. Les cartes fictives restent séparées.",14,muted,false));for(RealProfile p:list){LinearLayout c=column();c.setPadding(dp(16),dp(16),dp(16),dp(16));c.setBackground(shape(panel,20));c.setOnClickListener(v->showRealProfileDetails(p));c.addView(text("👤  "+p.name,20,ink,true));c.addView(text(p.profession+" • "+p.city,14,gold,true));if(!p.education.isEmpty())c.addView(text("Formation : "+p.education,13,muted,false));if(!p.skills.isEmpty())c.addView(text("Compétences : "+p.skills,13,muted,false));if(!p.availability.isEmpty())c.addView(text("Disponibilité : "+p.availability,13,muted,false));space(c,8);c.addView(text("Touchez pour consulter le profil complet  ↗",12,gold,true));space(c,10);LinearLayout a=row();a.addView(button("Passer",false,()->swipeReal(p.id,"pass",c)),new LinearLayout.LayoutParams(0,dp(48),1));hspace(a,8);a.addView(button("♥ J'aime",true,()->swipeReal(p.id,"like",c)),new LinearLayout.LayoutParams(0,dp(48),1));c.addView(a);content.addView(c);space(content,10);}content.addView(button("Actualiser",false,this::loadRealCandidates));content.addView(button("Mes matches",false,this::loadMyMatches));});}catch(Exception e){String m=e.getMessage()==null?"Erreur réseau":e.getMessage();runOnUiThread(()->{status.setText("Erreur : "+m);content.addView(button("Réessayer",true,this::loadRealCandidates));});}}).start();}
+    private void loadRealCandidates(){prepareScreen(false,this::loadRealCandidates);base("Candidats inscrits","Profils réels • visibilité activée volontairement.",TAB_EMPLOYERS,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{String uid=me();JSONArray ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability,account_type&account_type=eq.job_seeker&is_discoverable=eq.true&user_id=neq."+enc(uid)+"&order=updated_at.desc&limit=60");JSONArray sw=rows("job_swipes?select=target_id&actor_id=eq."+enc(uid));Set<String> done=new HashSet<>();for(int i=0;i<sw.length();i++)done.add(sw.getJSONObject(i).optString("target_id",""));ArrayList<RealProfile> list=new ArrayList<>();for(int i=0;i<ps.length();i++){RealProfile p=new RealProfile(ps.getJSONObject(i));if(!done.contains(p.id))list.add(p);}runOnUiThread(()->{status.setVisibility(View.GONE);content.addView(text(list.size()+" profil(s) réel(s)",17,gold,true));space(content,8);if(list.isEmpty())content.addView(text("Aucun nouveau profil visible. Les cartes fictives restent séparées.",14,muted,false));for(RealProfile p:list){LinearLayout c=column();c.setPadding(dp(16),dp(16),dp(16),dp(16));c.setBackground(shape(panel,20));c.setOnClickListener(v->showRealProfileDetails(p));c.addView(text("👤  "+p.name,20,ink,true));c.addView(text(p.profession+" • "+p.city,14,gold,true));if(!p.education.isEmpty())c.addView(text("Formation : "+p.education,13,muted,false));if(!p.skills.isEmpty())c.addView(text("Compétences : "+p.skills,13,muted,false));if(!p.availability.isEmpty())c.addView(text("Disponibilité : "+p.availability,13,muted,false));space(c,8);c.addView(text("Touchez pour consulter le profil complet  ↗",12,gold,true));space(c,10);LinearLayout a=row();a.addView(button("Passer",false,()->swipeReal(p.id,"pass",c)),new LinearLayout.LayoutParams(0,dp(48),1));hspace(a,8);a.addView(button("♥ J'aime",true,()->swipeReal(p.id,"like",c)),new LinearLayout.LayoutParams(0,dp(48),1));c.addView(a);content.addView(c);space(content,10);}content.addView(button("Actualiser",false,this::loadRealCandidates));content.addView(button("Mes matches",false,this::loadMyMatches));});}catch(Exception e){String m=e.getMessage()==null?"Erreur réseau":e.getMessage();runOnUiThread(()->{status.setText("Erreur : "+m);content.addView(button("Réessayer",true,this::loadRealCandidates));});}}).start();}
     private void swipeReal(String target,String decision,View card){try{JSONObject b=new JSONObject();b.put("actor_id",me());b.put("target_id",target);b.put("decision",decision);new Thread(()->{try{rest("POST","job_swipes",b);runOnUiThread(()->{card.setVisibility(View.GONE);Toast.makeText(this,decision.equals("like")?"Like envoyé. Match si le like est réciproque.":"Profil passé.",Toast.LENGTH_LONG).show();});}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->Toast.makeText(this,m,Toast.LENGTH_LONG).show());}}).start();}catch(Exception e){Toast.makeText(this,"Action impossible.",Toast.LENGTH_SHORT).show();}}
-    private void loadIncomingLikes(){prepareScreen(false,this::loadIncomingLikes);base("Likes reçus","Recruteurs intéressés par votre profil.",TAB_PROFILE,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{JSONArray likes=rows("job_swipes?select=actor_id&target_id=eq."+enc(me())+"&decision=eq.like&order=created_at.desc");ArrayList<String> ids=new ArrayList<>();for(int i=0;i<likes.length();i++){String id=likes.getJSONObject(i).optString("actor_id","");if(!id.isEmpty()&&!ids.contains(id))ids.add(id);}JSONArray ps=new JSONArray();if(!ids.isEmpty()){StringBuilder in=new StringBuilder();for(String id:ids){if(in.length()>0)in.append(",");in.append(id);}ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability&user_id=in.("+in+")");}ArrayList<RealProfile> people=new ArrayList<>();for(int i=0;i<ps.length();i++)people.add(new RealProfile(ps.getJSONObject(i)));runOnUiThread(()->{status.setVisibility(View.GONE);if(people.isEmpty())content.addView(text("Aucun like reçu. Activez la visibilité de votre profil.",14,muted,false));for(RealProfile p:people){LinearLayout c=column();c.setPadding(dp(15),dp(14),dp(15),dp(14));c.setBackground(shape(panel,18));c.addView(text(p.name,19,ink,true));c.addView(text(p.profession+" • "+p.city,14,gold,true));space(c,8);c.addView(button("♥ Aimer en retour",true,()->swipeReal(p.id,"like",c)));content.addView(c);space(content,8);}content.addView(button("Mes matches",false,this::loadMyMatches));content.addView(button("Actualiser",false,this::loadIncomingLikes));});}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->status.setText("Erreur : "+m));}}).start();}
-    private void loadMyMatches(){prepareScreen(false,this::loadMyMatches);base("Mes matches","Les conversations s'ouvrent après un like réciproque.",employerMode?TAB_EMPLOYERS:TAB_PROFILE,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{String uid=me();JSONArray ms=rows("job_matches?select=id,user_a,user_b&or=(user_a.eq."+enc(uid)+",user_b.eq."+enc(uid)+")&order=created_at.desc");ArrayList<String> ids=new ArrayList<>(),mids=new ArrayList<>();for(int i=0;i<ms.length();i++){JSONObject x=ms.getJSONObject(i);mids.add(x.optString("id",""));ids.add(x.optString("user_a","").equals(uid)?x.optString("user_b",""):x.optString("user_a",""));}JSONArray ps=new JSONArray();if(!ids.isEmpty()){StringBuilder in=new StringBuilder();for(String id:ids){if(in.length()>0)in.append(",");in.append(id);}ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability&user_id=in.("+in+")");}java.util.HashMap<String,RealProfile> map=new java.util.HashMap<>();for(int i=0;i<ps.length();i++){RealProfile p=new RealProfile(ps.getJSONObject(i));map.put(p.id,p);}ArrayList<RealProfile> people=new ArrayList<>();ArrayList<String> matchedIds=new ArrayList<>();for(int i=0;i<ids.size();i++)if(map.containsKey(ids.get(i))){people.add(map.get(ids.get(i)));matchedIds.add(mids.get(i));}runOnUiThread(()->{status.setVisibility(View.GONE);if(people.isEmpty())content.addView(text("Pas encore de match.",14,muted,false));for(int i=0;i<people.size();i++){RealProfile p=people.get(i);String mid=matchedIds.get(i);LinearLayout c=column();c.setPadding(dp(15),dp(14),dp(15),dp(14));c.setBackground(shape(panel,18));c.addView(text("♥ "+p.name,19,ink,true));c.addView(text(p.profession+" • "+p.city,13,muted,false));space(c,8);c.addView(button("Ouvrir la conversation",true,()->openMatchedChat(mid,p)));content.addView(c);space(content,8);}content.addView(button("Actualiser",false,this::loadMyMatches));});}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->status.setText("Erreur : "+m));}}).start();}
+    private void loadIncomingLikes(){prepareScreen(false,this::loadIncomingLikes);base("Likes reçus","Recruteurs intéressés par votre profil.",TAB_PROFILE,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{JSONArray likes=rows("job_swipes?select=actor_id&target_id=eq."+enc(me())+"&decision=eq.like&order=created_at.desc");ArrayList<String> ids=new ArrayList<>();for(int i=0;i<likes.length();i++){String id=likes.getJSONObject(i).optString("actor_id","");if(!id.isEmpty()&&!ids.contains(id))ids.add(id);}JSONArray ps=new JSONArray();if(!ids.isEmpty()){StringBuilder in=new StringBuilder();for(String id:ids){if(in.length()>0)in.append(",");in.append(id);}ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability,account_type&user_id=in.("+in+")");}ArrayList<RealProfile> people=new ArrayList<>();for(int i=0;i<ps.length();i++)people.add(new RealProfile(ps.getJSONObject(i)));runOnUiThread(()->{status.setVisibility(View.GONE);if(people.isEmpty())content.addView(text("Aucun like reçu. Activez la visibilité de votre profil.",14,muted,false));for(RealProfile p:people){LinearLayout c=column();c.setPadding(dp(15),dp(14),dp(15),dp(14));c.setBackground(shape(panel,18));c.addView(text(p.name,19,ink,true));c.addView(text(p.profession+" • "+p.city,14,gold,true));space(c,8);c.addView(button("♥ Aimer en retour",true,()->swipeReal(p.id,"like",c)));content.addView(c);space(content,8);}content.addView(button("Mes matches",false,this::loadMyMatches));content.addView(button("Actualiser",false,this::loadIncomingLikes));});}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->status.setText("Erreur : "+m));}}).start();}
+    private void loadMyMatches(){prepareScreen(false,this::loadMyMatches);base("Mes matches","Les conversations s'ouvrent après un like réciproque.",employerMode?TAB_EMPLOYERS:TAB_PROFILE,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{String uid=me();JSONArray ms=rows("job_matches?select=id,user_a,user_b&or=(user_a.eq."+enc(uid)+",user_b.eq."+enc(uid)+")&order=created_at.desc");ArrayList<String> ids=new ArrayList<>(),mids=new ArrayList<>();for(int i=0;i<ms.length();i++){JSONObject x=ms.getJSONObject(i);mids.add(x.optString("id",""));ids.add(x.optString("user_a","").equals(uid)?x.optString("user_b",""):x.optString("user_a",""));}JSONArray ps=new JSONArray();if(!ids.isEmpty()){StringBuilder in=new StringBuilder();for(String id:ids){if(in.length()>0)in.append(",");in.append(id);}ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability&user_id=in.("+in+")");}java.util.HashMap<String,RealProfile> map=new java.util.HashMap<>();for(int i=0;i<ps.length();i++){RealProfile p=new RealProfile(ps.getJSONObject(i));map.put(p.id,p);}ArrayList<RealProfile> people=new ArrayList<>();ArrayList<String> matchedIds=new ArrayList<>();for(int i=0;i<ids.size();i++)if(map.containsKey(ids.get(i))){people.add(map.get(ids.get(i)));matchedIds.add(mids.get(i));}runOnUiThread(()->{status.setVisibility(View.GONE);if(people.isEmpty())content.addView(text("Pas encore de match.",14,muted,false));for(int i=0;i<people.size();i++){RealProfile p=people.get(i);String mid=matchedIds.get(i);LinearLayout c=column();c.setPadding(dp(15),dp(14),dp(15),dp(14));c.setBackground(shape(panel,18));TextView matchName=text("♥ "+p.name+"  ↗",21,ink,true);matchName.setPadding(0,dp(4),0,dp(4));matchName.setOnClickListener(v->showRealProfileDetails(p,this::loadMyMatches));c.addView(matchName);c.addView(text((p.isEmployer()?"🏢 Recruteur":"👤 Candidat")+" • "+p.profession+" • "+p.city,13,muted,false));space(c,8);c.addView(button("Voir le profil complet",false,()->showRealProfileDetails(p,this::loadMyMatches)),new LinearLayout.LayoutParams(-1,dp(46)));space(c,6);c.addView(button("Ouvrir la conversation",true,()->openMatchedChat(mid,p)));content.addView(c);space(content,8);}content.addView(button("Actualiser",false,this::loadMyMatches));});}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->status.setText("Erreur : "+m));}}).start();}
     private void openMatchedChat(String matchId,RealProfile other){new Thread(()->{try{JSONArray c=rows("job_conversations?select=id&match_id=eq."+enc(matchId)+"&limit=1");if(c.length()==0)throw new Exception("Conversation indisponible.");String id=c.getJSONObject(0).optString("id","");runOnUiThread(()->showPrivateChat(id,matchId,other));}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->Toast.makeText(this,m,Toast.LENGTH_LONG).show());}}).start();}
     private void showPrivateChat(String id,String matchId,RealProfile other){
         prepareScreen(false,()->showPrivateChat(id,matchId,other));
