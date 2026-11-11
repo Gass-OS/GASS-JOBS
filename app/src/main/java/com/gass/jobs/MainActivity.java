@@ -861,7 +861,7 @@ public class MainActivity extends Activity {
                 .setMessage("Ville : " + c.city + "\nExpérience : " + c.experience
                         + "\nFormation : " + c.education + "\nCompétences : " + c.skills
                         + "\nDisponibilité : " + c.availability
-                        + "\n\nProfil fictif de démonstration : l'avatar est généré au hasard et ne représente pas une vraie personne. Aucun contact réel n'est associé.")
+                        + "\n\nProfil fictif de démonstration : la photo est illustrative et les informations ne représentent pas une vraie candidature. Aucun contact réel n'est associé.")
                 .setPositiveButton("Fermer", (dialog, which) -> dialog.dismiss()).show();
     }
 
@@ -980,7 +980,7 @@ public class MainActivity extends Activity {
                     "Ouvre le site officiel de l'Agence nationale pour l'emploi et le travail indépendant, avec les offres en Tunisie."),
                     new LinearLayout.LayoutParams(-1, dp(46)));
             space(content, 6);
-            content.addView(text("Cartes suivantes : offres ANETI International publiées par la source officielle. Vérifiez la disponibilité et les délais sur chaque annonce.", 11, muted, false));
+            content.addView(text("Après les offres ANETI, découvrez aussi 8 profils candidats fictifs avec photos illustratives. Ils sont clairement indiqués comme démonstrations et ne sont pas de vraies candidatures.", 11, muted, false));
         } else {
             content.addView(text("Profils candidats de démonstration — aucun profil réel n'est publié.", 11, muted, false));
         }
