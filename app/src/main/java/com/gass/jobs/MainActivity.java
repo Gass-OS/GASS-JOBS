@@ -843,8 +843,8 @@ public class MainActivity extends Activity {
         icon.setGravity(Gravity.CENTER);
         box.addView(icon);
         space(box, 8);
-        TextView msg = text(candidates ? "Vous avez parcouru tous les profils de démonstration."
-                : "Vous avez parcouru les offres ANETI et les profils fictifs de démonstration.", 18, ink, true);
+        TextView msg = text(candidates ? "Vous avez parcouru les profils candidats de démonstration. Consultez aussi les vrais candidats."
+                : "Vous avez parcouru les offres d'emploi publiées et les offres ANETI disponibles.", 18, ink, true);
         msg.setGravity(Gravity.CENTER);
         box.addView(msg);
         space(box, 18);
@@ -883,15 +883,15 @@ public class MainActivity extends Activity {
         // fictional candidate profiles using the eight supplied portrait photos.
         // Recruiters retain their independent full candidate deck.
         final boolean recruiterDeck = employerMode;
-        final int total = recruiterDeck ? demoCandidates.size() : publishedJobs.size() + anetiJobs.size() + demoCandidates.size();
+        final int total = recruiterDeck ? demoCandidates.size() : publishedJobs.size() + anetiJobs.size();
         final int index = recruiterDeck ? candidateSwipeIndex : swipeIndex;
         if (index >= total) {
             deckHolder.addView(emptyDeck(recruiterDeck), new FrameLayout.LayoutParams(-1, -1));
             return;
         }
 
-        final boolean demoProfile = recruiterDeck || index >= publishedJobs.size() + anetiJobs.size();
-        final int candidateIndex = recruiterDeck ? index : index - publishedJobs.size() - anetiJobs.size();
+        final boolean demoProfile = recruiterDeck;
+        final int candidateIndex = index;
         final Job job = demoProfile ? null : (index < publishedJobs.size()
                 ? publishedJobs.get(index) : anetiJobs.get(index - publishedJobs.size()));
         final Candidate person = demoProfile ? demoCandidates.get(candidateIndex) : null;
@@ -990,9 +990,9 @@ public class MainActivity extends Activity {
                     "Ouvre le site officiel de l'Agence nationale pour l'emploi et le travail indépendant, avec les offres en Tunisie."),
                     new LinearLayout.LayoutParams(-1, dp(46)));
             space(content, 6);
-            content.addView(text("Après les offres ANETI, découvrez aussi 8 profils candidats fictifs avec photos illustratives. Ils sont clairement indiqués comme démonstrations et ne sont pas de vraies candidatures.", 11, muted, false));
+            content.addView(text("Découvrez les offres publiées par les employeurs et les annonces ANETI. Les profils candidats ne sont pas mélangés à votre recherche d'emploi.", 11, muted, false));
         } else {
-            content.addView(text("Profils candidats de démonstration — aucun profil réel n'est publié.", 11, muted, false));
+            content.addView(text("Les vrais candidats sont accessibles dans le flux de recrutement. Les cartes fictives restent clairement identifiées.", 11, muted, false));
         }
         addTipRow();
         space(content, 8);
@@ -1172,7 +1172,7 @@ public class MainActivity extends Activity {
         content.addView(text("Les offres publiées apparaissent dans le flux des chercheurs d'emploi. Les brouillons restent privés.", 12, muted, false));
         space(content, 16);
 
-        android.content.SharedPreferences draft = getSharedPreferences("gass_jobs_drafts", MODE_PRIVATE);
+        android.content.SharedPreferences draft = draftPrefs();
         if (draft.contains("title")) {
             LinearLayout offer = column();
             offer.setPadding(dp(18), dp(18), dp(18), dp(18));
@@ -2041,7 +2041,7 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "Complétez les champs obligatoires (*).", Toast.LENGTH_LONG).show();
                 return;
             }
-            getSharedPreferences("gass_jobs_drafts", MODE_PRIVATE).edit()
+            draftPrefs().edit()
                     .putString("title", jobTitle)
                     .putString("company", employer)
                     .putString("governorate", selected(region))
@@ -2055,7 +2055,7 @@ public class MainActivity extends Activity {
         }));
         space(content, 10);
         content.addView(button("Retour", false, this::showEmployerSpace));
-        android.content.SharedPreferences saved = getSharedPreferences("gass_jobs_drafts", MODE_PRIVATE);
+        android.content.SharedPreferences saved = draftPrefs();
         if (saved.contains("title")) {
             space(content, 18);
             content.addView(text("Dernier brouillon enregistré", 17, ink, true));
@@ -2153,7 +2153,7 @@ public class MainActivity extends Activity {
     private void clearEverything() {
         clearSavedItems();
         profilePrefs().edit().clear().apply();
-        getSharedPreferences("gass_jobs_drafts", MODE_PRIVATE).edit().clear().apply();
+        draftPrefs().edit().clear().apply();
         employerPrefs().edit().clear().apply();
         new File(getFilesDir(), accountProfileFileName("profile-photo")).delete();
         new File(getFilesDir(), accountProfileFileName("profile-cv")).delete();
@@ -2767,6 +2767,12 @@ public class MainActivity extends Activity {
         uid = uid.replaceAll("[^A-Za-z0-9_-]", "_");
         if (uid.isEmpty()) uid = "signed-out";
         return baseName + "-" + uid;
+    }
+
+    private SharedPreferences draftPrefs() {
+        String uid=authPrefs().getString("user_id","signed-out").trim().replaceAll("[^A-Za-z0-9_-]","_");
+        if(uid.isEmpty()) uid="signed-out";
+        return getSharedPreferences("gass_jobs_drafts_"+uid,MODE_PRIVATE);
     }
 
     // Recruiter/company details are private to the same signed-in account as the candidate profile.
