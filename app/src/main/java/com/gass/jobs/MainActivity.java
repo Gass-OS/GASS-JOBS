@@ -983,22 +983,16 @@ public class MainActivity extends Activity {
                 new LinearLayout.LayoutParams(0, dp(44), 1));
         content.addView(switcher, new LinearLayout.LayoutParams(-1, -2));
         space(content, 8);
-        if (!employerMode) {
-            content.addView(explain(button("🇹🇳  Offres ANETI en Tunisie", false,
-                    () -> openExternal(ANETI_TUNISIA_OFFERS)),
-                    "Offres ANETI en Tunisie",
-                    "Ouvre le site officiel de l'Agence nationale pour l'emploi et le travail indépendant, avec les offres en Tunisie."),
-                    new LinearLayout.LayoutParams(-1, dp(46)));
-            space(content, 6);
-            content.addView(text("Découvrez les offres publiées par les employeurs et les annonces ANETI. Les profils candidats ne sont pas mélangés à votre recherche d'emploi.", 11, muted, false));
-        } else {
+        if (employerMode) {
             content.addView(text("Les vrais candidats sont accessibles dans le flux de recrutement. Les cartes fictives restent clairement identifiées.", 11, muted, false));
         }
+        // Keep the swipe deck inside the actual space left on screen so profile
+        // photos and action buttons are never hidden below the bottom navigation.
         addTipRow();
-        space(content, 8);
+        space(content, 6);
 
         deckHolder = new FrameLayout(this);
-        content.addView(deckHolder, new LinearLayout.LayoutParams(-1, dp(employerMode ? 590 : 470)));
+        content.addView(deckHolder, new LinearLayout.LayoutParams(-1, 0, 1));
         space(content, 6);
 
         actionBar = row();
