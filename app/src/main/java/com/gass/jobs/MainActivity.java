@@ -1380,8 +1380,8 @@ public class MainActivity extends Activity {
         content.addView(text("Utilisée pour pré-remplir votre profil et vos offres.", 12, muted, false));
         space(content, 14);
 
-        sectionTitle("Langue");
-        content.addView(text("L'interface est en français. L'arabe et l'anglais seront ajoutés progressivement.", 13, muted, false));
+        sectionTitle("Langue / Language / اللغة");
+        content.addView(button("🌐  Français • English • العربية", false, this::chooseLanguage), new LinearLayout.LayoutParams(-1, dp(56)));
         space(content, 14);
 
         sectionTitle("Mon compte");
@@ -1389,10 +1389,6 @@ public class MainActivity extends Activity {
         space(content, 8);
         content.addView(button("⇥   Se déconnecter", false, () -> confirmAction("Se déconnecter ?", "Votre session sera fermée. Vos données locales restent sur ce téléphone.", "Déconnexion", this::logout)), new LinearLayout.LayoutParams(-1, dp(52)));
         space(content, 8);
-        content.addView(button("♙   Mon profil candidat", false, this::showProfile), new LinearLayout.LayoutParams(-1, dp(52)));
-        space(content, 8);
-        content.addView(button(hasEmployerProfile() ? "▣   Mon profil recruteur (seul / société)" : "▣   Devenir recruteur", false,
-                () -> showEmployerType(this::showSettings)), new LinearLayout.LayoutParams(-1, dp(52)));
         space(content, 14);
 
         sectionTitle("Aide");
