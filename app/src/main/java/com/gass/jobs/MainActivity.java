@@ -1836,8 +1836,13 @@ public class MainActivity extends Activity {
                     mime = "image/jpeg";
                     objectPath = uid + "/profile-photo.jpg";
                 } else {
-                    uploadBytes = java.nio.file.Files.readAllBytes(file.toPath());
-                    mime = originalMime;
+                    ByteArrayOutputStream cvBytes = new ByteArrayOutputStream();
+                    try (InputStream cvIn = new java.io.FileInputStream(file)) {
+                        byte[] buffer = new byte[8192]; int count;
+                        while ((count = cvIn.read(buffer)) != -1) cvBytes.write(buffer, 0, count);
+                    }
+                    uploadBytes = cvBytes.toByteArray();
+                    mime = originalMime == null || originalMime.isEmpty() ? "application/pdf" : originalMime;
                     objectPath = uid + "/profile-cv" + (mime.equals("application/pdf") ? ".pdf" : mime.equals("application/msword") ? ".doc" : ".docx");
                 }
                 URL url = new URL(SUPABASE_URL + "/storage/v1/object/" + bucket + "/" + objectPath);
