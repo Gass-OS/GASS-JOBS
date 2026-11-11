@@ -128,14 +128,20 @@ create policy "Matched users send messages" on public.job_messages
 drop policy if exists "Recipients mark messages read" on public.job_messages;
 create policy "Recipients mark messages read" on public.job_messages
   for update to authenticated
-  using (exists (
-    select 1 from public.job_conversations c
-    where c.id = conversation_id and (c.user_a = auth.uid() or c.user_b = auth.uid())
-  ))
-  with check (exists (
-    select 1 from public.job_conversations c
-    where c.id = conversation_id and (c.user_a = auth.uid() or c.user_b = auth.uid())
-  ));
+  using (
+    sender_id <> auth.uid()
+    and exists (
+      select 1 from public.job_conversations c
+      where c.id = conversation_id and (c.user_a = auth.uid() or c.user_b = auth.uid())
+    )
+  )
+  with check (
+    sender_id <> auth.uid()
+    and exists (
+      select 1 from public.job_conversations c
+      where c.id = conversation_id and (c.user_a = auth.uid() or c.user_b = auth.uid())
+    )
+  );
 
 create or replace function public.create_job_match_after_like()
 returns trigger
@@ -204,4 +210,5 @@ end $$;
 grant select, insert, update on public.job_profiles to authenticated;
 grant select, insert, update on public.job_swipes to authenticated;
 grant select on public.job_matches, public.job_conversations to authenticated;
-grant select, insert, update on public.job_messages to authenticated;
+grant select, insert on public.job_messages to authenticated;
+grant update (read_at) on public.job_messages to authenticated;
