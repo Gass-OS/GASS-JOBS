@@ -503,7 +503,7 @@ public class MainActivity extends Activity {
         LinearLayout nav = row();
         nav.setBackgroundColor(Color.rgb(12, 13, 17));
         nav.setPadding(0, dp(4), 0, dp(6));
-        String[] icons = {"🏠", "💼", "👤", "📥", "🏢", "⚙️"};
+        String[] icons = {"🏠", "💼", "👤", "📥", "🏢", "＋"};
         String[] labels = {"Accueil", "Offres", "Profil", "Inbox", "Recrut.", "Plus"};
         Runnable[] actions = {this::showHome, this::showOffers, this::showProfile, this::showInbox, this::showEmployerSpace, this::showMenu};
         String[] navHelp = {
