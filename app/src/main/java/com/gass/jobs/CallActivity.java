@@ -126,7 +126,7 @@ public class CallActivity extends Activity {
             PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(this).createInitializationOptions());
             PeerConnectionFactory.Options options=new PeerConnectionFactory.Options();
             factory=PeerConnectionFactory.builder().setOptions(options)
-                .setVideoEncoderFactory(new DefaultVideoEncoderFactory(egl==null?EglBase.create().getEglBaseContext():egl.getEglBaseContext(),true,true))
+                .setVideoEncoderFactory(new DefaultVideoEncoderFactory(egl.getEglBaseContext(),true,true))
                 .setVideoDecoderFactory(new DefaultVideoDecoderFactory(egl==null?EglBase.create().getEglBaseContext():egl.getEglBaseContext())).createPeerConnectionFactory();
             List<PeerConnection.IceServer> servers=new ArrayList<>();
             for(int i=0;i<iceJson.length();i++){JSONObject x=iceJson.getJSONObject(i);JSONArray urls=x.optJSONArray("urls");if(urls==null)continue;ArrayList<String> values=new ArrayList<>();for(int j=0;j<urls.length();j++)values.add(urls.optString(j));if(values.isEmpty())continue;PeerConnection.IceServer.Builder b=PeerConnection.IceServer.builder(values);if(x.has("username"))b.setUsername(x.optString("username"));if(x.has("credential"))b.setPassword(x.optString("credential"));servers.add(b.createIceServer());}
@@ -146,7 +146,7 @@ public class CallActivity extends Activity {
                 @Override public void onConnectionChange(PeerConnection.PeerConnectionState s){}
                 @Override public void onTrack(RtpTransceiver t){}
             });
-            audioSource=factory.createAudioSource(new MediaConstraints());audioTrack=factory.createAudioTrack("tun_jobs_audio",audioSource);peer.addTrack(audioTrack);
+            audioSource=factory.createAudioSource(new MediaConstraints());audioTrack=factory.createAudioTrack("tun_jobs_audio",audioSource);peer.addTrack(audioTrack,java.util.Collections.singletonList("tun_jobs_stream"));
             if(video)createCameraTrack();
             if(outgoing)createOffer();else acceptOffer();
             pollSignals();
@@ -161,7 +161,7 @@ public class CallActivity extends Activity {
         capturer=enumerator.createCapturer(chosen,null);if(capturer==null)throw new Exception("Camera unavailable");
         textureHelper=SurfaceTextureHelper.create("TunJobsCapture",egl.getEglBaseContext());videoSource=factory.createVideoSource(capturer.isScreencast());
         capturer.initialize(textureHelper,this,videoSource.getCapturerObserver());capturer.startCapture(640,480,24);
-        localVideoTrack=factory.createVideoTrack("tun_jobs_video",videoSource);localVideoTrack.addSink(localView);peer.addTrack(localVideoTrack);
+        localVideoTrack=factory.createVideoTrack("tun_jobs_video",videoSource);localVideoTrack.addSink(localView);peer.addTrack(localVideoTrack,java.util.Collections.singletonList("tun_jobs_stream"));
     }
 
     private void createOffer(){
