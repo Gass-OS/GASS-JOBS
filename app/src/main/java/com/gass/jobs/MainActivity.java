@@ -366,7 +366,7 @@ public class MainActivity extends Activity {
         String language = settings().getString("language", "fr");
         if (value == null || "fr".equals(language)) return value;
         String[][] words = {
-            {"Accueil","Home","الرئيسية"},{"Offres","Jobs","الوظائف"},{"Profil","Profile","الملف الشخصي"},{"Employeurs","Employers","أصحاب العمل"},{"Plus","More","المزيد"},
+            {"Accueil","Home","الرئيسية"},{"Recrut.","Employers","أصحاب العمل"},{"Offres","Jobs","الوظائف"},{"Profil","Profile","الملف الشخصي"},{"Employeurs","Employers","أصحاب العمل"},{"Plus","More","المزيد"},
             {"Paramètres","Settings","الإعدادات"},{"Conseils et aide","Tips & Help","النصائح والمساعدة"},{"À propos de nous","About us","من نحن"},{"Sites officiels","Official websites","المواقع الرسمية"},{"Bureaux régionaux","Regional offices","المكاتب الجهوية"},
             {"Se déconnecter","Log out","تسجيل الخروج"},{"Langue / Language","Language","اللغة"},{"Apparence","Appearance","المظهر"},{"Taille du texte","Text size","حجم النص"},{"Cartes et aide","Cards & help","البطاقات والمساعدة"},
             {"Aide par appui long","Long-press help","المساعدة بالضغط المطول"},{"Conseils sur la page principale","Home tips","نصائح الصفحة الرئيسية"},{"Vibration légère","Light vibration","اهتزاز خفيف"},{"Ma région","My region","منطقتي"},{"Gouvernorat par défaut","Default governorate","الولاية الافتراضية"},
@@ -502,7 +502,7 @@ public class MainActivity extends Activity {
         nav.setBackgroundColor(Color.rgb(12, 13, 17));
         nav.setPadding(0, dp(4), 0, dp(6));
         String[] icons = {"🏠", "💼", "👤", "📥", "🏢", "⚙️"};
-        String[] labels = {"Accueil", "Offres", "Profil", "Inbox", "Employeurs", "Plus"};
+        String[] labels = {"Accueil", "Offres", "Profil", "Inbox", "Recrut.", "Plus"};
         Runnable[] actions = {this::showHome, this::showOffers, this::showProfile, this::showInbox, this::showEmployerSpace, this::showMenu};
         String[] navHelp = {
             "L'accueil : les cartes d'offres à faire glisser (ou de profils si vous recrutez).",
