@@ -233,8 +233,13 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        if (hasAuthSession()) showHome();
-        else if (getSharedPreferences("tun_jobs", MODE_PRIVATE).getBoolean("welcome_done", false)) showAuth();
+        if (hasAuthSession()) {
+            // Restore the signed-in user's cloud profile before opening the app.
+            new Thread(() -> {
+                restoreProfileFromSupabase();
+                runOnUiThread(this::showHome);
+            }).start();
+        } else if (getSharedPreferences("tun_jobs", MODE_PRIVATE).getBoolean("welcome_done", false)) showAuth();
         else showWelcome();
     }
 
@@ -1747,6 +1752,9 @@ public class MainActivity extends Activity {
         try {
             payload.put("user_id", userId);
             payload.put("full_name", profile.getString("name", ""));
+            // phone is stored in the user's own RLS-protected row; it is never selected
+            // by public discovery or matching queries.
+            payload.put("phone", profile.getString("phone", ""));
             payload.put("city", profile.getString("city", ""));
             payload.put("profession", profile.getString("experience", ""));
             payload.put("education", profile.getString("education", ""));
@@ -1805,6 +1813,59 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+
+    // Restore private profile fields from the authenticated user's own Supabase row.
+    // Local-only photo and CV files are deliberately never overwritten or deleted here.
+    private void restoreProfileFromSupabase() {
+        if (!hasAuthSession() || authPrefs().getString("user_id", "").isEmpty()) return;
+        try {
+            String uid = authPrefs().getString("user_id", "");
+            JSONArray savedRows = rows("job_profiles?select=full_name,phone,city,profession,education,skills,availability,account_type,is_discoverable&user_id=eq." + enc(uid) + "&limit=1");
+            SharedPreferences profile = getSharedPreferences("tun_jobs_profile", MODE_PRIVATE);
+            if (savedRows.length() > 0) {
+                JSONObject remote = savedRows.getJSONObject(0);
+                SharedPreferences.Editor edit = profile.edit();
+                boolean hasRemoteData = false;
+                String[][] fields = {
+                    {"full_name", "name"}, {"phone", "phone"}, {"city", "city"},
+                    {"profession", "experience"}, {"education", "education"},
+                    {"skills", "skills"}, {"availability", "availability"}
+                };
+                for (String[] field : fields) {
+                    String value = remote.optString(field[0], "").trim();
+                    // Do not replace a useful local value with an empty cloud value.
+                    if (!value.isEmpty()) {
+                        edit.putString(field[1], value);
+                        hasRemoteData = true;
+                    }
+                }
+                if (hasRemoteData || profile.getBoolean("profile_saved", false)) {
+                    edit.putBoolean("profile_saved", true);
+                }
+                edit.putBoolean("discoverable", remote.optBoolean("is_discoverable", profile.getBoolean("discoverable", false)));
+                edit.putBoolean("cloud_profile_restored", true);
+                edit.commit();
+                String accountType = remote.optString("account_type", "");
+                if ("employer".equals(accountType)) employerMode = true;
+            } else {
+                // First login on a fresh install: retain the name supplied at signup.
+                String signupName = authPrefs().getString("full_name", "").trim();
+                if (!signupName.isEmpty() && profile.getString("name", "").trim().isEmpty()) {
+                    profile.edit().putString("name", signupName).apply();
+                }
+                // If this device already has a completed profile, seed the cloud row once.
+                if (profile.getBoolean("profile_saved", false)) {
+                    runOnUiThread(this::syncProfileToSupabase);
+                }
+            }
+        } catch (Exception error) {
+            // A network failure must never clear or replace the on-device profile.
+            String message = error.getMessage() == null ? "Réseau indisponible." : error.getMessage();
+            runOnUiThread(() -> Toast.makeText(this,
+                    "Profil local conservé. Restauration cloud impossible : " + message,
+                    Toast.LENGTH_LONG).show());
+        }
+    }
 
     // Real profiles only: demo cards never enter these matching or chat endpoints.
     private static class RealProfile {String id,name,city,profession,education,skills,availability;RealProfile(JSONObject j){id=j.optString("user_id","");name=j.optString("full_name","Candidat");city=j.optString("city","");profession=j.optString("profession","");education=j.optString("education","");skills=j.optString("skills","");availability=j.optString("availability","");}}
@@ -2750,9 +2811,18 @@ public class MainActivity extends Activity {
                             .putString("refresh_token", refresh)
                             .putString("email", email)
                             .putBoolean("email_confirmed", user == null || user.optString("email_confirmed_at", "").length() > 0);
-                    if (user != null) editor.putString("user_id", user.optString("id", ""));
-                    if (signup) editor.putString("full_name", name);
+                    if (user != null) {
+                        editor.putString("user_id", user.optString("id", ""));
+                        JSONObject metadata = user.optJSONObject("user_metadata");
+                        if (signup) editor.putString("full_name", name);
+                        else if (metadata != null) {
+                            String metadataName = metadata.optString("full_name", "").trim();
+                            if (!metadataName.isEmpty()) editor.putString("full_name", metadataName);
+                        }
+                    }
                     editor.apply();
+                    // Restore profile fields before showing the signed-in home screen.
+                    restoreProfileFromSupabase();
                     runOnUiThread(() -> {
                         getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
                         employerMode = authPrefs().getBoolean("pending_employer_mode", false);
