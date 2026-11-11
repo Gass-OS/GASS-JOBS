@@ -124,8 +124,11 @@ public class MainActivity extends Activity {
     }
 
     private static class Candidate {
-        final String name, profession, city, experience, education, skills, availability;
+        final String name, profession, city, experience, education, skills, availability, photoAsset;
         Candidate(String name, String profession, String city, String experience, String education, String skills, String availability) {
+            this(name, profession, city, experience, education, skills, availability, "");
+        }
+        Candidate(String name, String profession, String city, String experience, String education, String skills, String availability, String photoAsset) {
             this.name = name;
             this.profession = profession;
             this.city = city;
@@ -133,6 +136,7 @@ public class MainActivity extends Activity {
             this.education = education;
             this.skills = skills;
             this.availability = availability;
+            this.photoAsset = photoAsset;
         }
         String key() { return name + "|" + profession + "|" + city; }
     }
@@ -144,6 +148,16 @@ public class MainActivity extends Activity {
         add(new Candidate("Meriem Gharbi", "Comptable", "Kasserine", "4 ans", "Licence comptabilité", "Sage • Excel • Facturation", "Temps plein"));
         add(new Candidate("Fares Jlassi", "Électricien bâtiment", "Fériana", "5 ans", "CAP électricité", "Installation • Sécurité • Maintenance", "Disponible immédiatement"));
         add(new Candidate("Ines Khemiri", "Vendeuse / Conseillère", "Kairouan", "1 an", "Baccalauréat", "Vente • Relation client • Caisse", "Temps plein ou partiel"));
+
+        // Eight fictional demo cards using the supplied portraits.
+        add(new Candidate("Profil démo 01", "Assistante administrative", "Kasserine", "2 ans", "Baccalauréat", "Bureautique • Accueil • Organisation", "Disponible immédiatement", "demo_candidates/IMG_20261111_091036.jpg"));
+        add(new Candidate("Profil démo 02", "Conseillère commerciale", "Sbeitla", "1 an", "Formation commerciale", "Vente • Communication • Client", "Temps plein", "demo_candidates/IMG_20261111_091042.jpg"));
+        add(new Candidate("Profil démo 03", "Technicienne informatique", "Kasserine", "2 ans", "Technicienne supérieure", "Informatique • Support • Réseaux", "Disponible immédiatement", "demo_candidates/IMG_20261111_091049.jpg"));
+        add(new Candidate("Profil démo 04", "Assistante comptable", "Kairouan", "3 ans", "Licence gestion", "Excel • Comptabilité • Facturation", "Temps plein", "demo_candidates/IMG_20261111_091056.jpg"));
+        add(new Candidate("Profil démo 05", "Chargée d'accueil", "Fériana", "1 an", "Baccalauréat", "Accueil • Service • Organisation", "Temps partiel", "demo_candidates/IMG_20261111_091104.jpg"));
+        add(new Candidate("Profil démo 06", "Technicienne de laboratoire", "Tunis", "2 ans", "Formation spécialisée", "Analyse • Hygiène • Précision", "Disponible sous 2 semaines", "demo_candidates/IMG_20261111_091112.jpg"));
+        add(new Candidate("Profil démo 07", "Secrétaire médicale", "Kasserine", "1 an", "Formation secrétariat", "Accueil • Dossiers • Bureautique", "Disponible immédiatement", "demo_candidates/IMG_20261111_091122.jpg"));
+        add(new Candidate("Profil démo 08", "Assistante ressources humaines", "Sousse", "2 ans", "Licence RH", "Recrutement • Organisation • Communication", "Temps plein", "demo_candidates/IMG_20261111_091128.jpg"));
     }};
 
     // Fictional examples used only to demonstrate the search UI.
@@ -604,8 +618,9 @@ public class MainActivity extends Activity {
         card.setClipToOutline(true);
 
         if (art != null) {
-            View portrait = new View(this);
-            portrait.setBackground(art);
+            ImageView portrait = new ImageView(this);
+            portrait.setImageDrawable(art);
+            portrait.setScaleType(ImageView.ScaleType.CENTER_CROP);
             card.addView(portrait, new FrameLayout.LayoutParams(-1, -1));
         } else {
             TextView avatar = text(glyph, 52, Color.WHITE, true);
@@ -689,15 +704,28 @@ public class MainActivity extends Activity {
                 job.description, new String[] {job.sector, job.contract}, (index + 1) + "/" + total, null);
     }
 
+    private Drawable loadDemoPortrait(String assetPath) {
+        if (assetPath == null || assetPath.isEmpty()) return null;
+        try (java.io.InputStream input = getAssets().open(assetPath)) {
+            return Drawable.createFromStream(input, null);
+        } catch (Exception e) {
+            android.util.Log.w("GASS-JOBS", "Demo portrait unavailable: " + assetPath, e);
+            return null;
+        }
+    }
+
     private View candidateCard(Candidate c, int index, int total) {
         String[] skills = c.skills.split(" • ");
         String[] chips = new String[Math.min(3, skills.length)];
         for (int i = 0; i < chips.length; i++) chips[i] = skills[i];
+        Drawable portrait = c.photoAsset.isEmpty()
+                ? new AvatarDrawable(avatarSeed(c)) : loadDemoPortrait(c.photoAsset);
+        if (portrait == null) portrait = new AvatarDrawable(avatarSeed(c));
         return deckCard(palette(c.name), "✓ Profil de démonstration", c.city,
                 c.name.substring(0, 1).toUpperCase(Locale.ROOT),
                 c.name, "💼  " + c.profession, "🎓  " + c.education + " • " + c.experience,
                 "● " + c.availability + " — profil fictif, aucun contact réel.", chips, (index + 1) + "/" + total,
-                new AvatarDrawable(avatarSeed(c)));
+                portrait);
     }
 
     private void fly(View card, int direction, Runnable after) {
