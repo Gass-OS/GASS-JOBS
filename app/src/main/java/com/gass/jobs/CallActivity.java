@@ -122,7 +122,8 @@ public class CallActivity extends Activity {
 
     private void initializePeer(JSONArray iceJson){
         try{
-            egl=EglBase.create();\n            if(video){remoteView.init(egl.getEglBaseContext(),null);remoteView.setMirror(false);localView.init(egl.getEglBaseContext(),null);localView.setMirror(true);}
+            egl=EglBase.create();
+            if(video){remoteView.init(egl.getEglBaseContext(),null);remoteView.setMirror(false);localView.init(egl.getEglBaseContext(),null);localView.setMirror(true);}
             PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(this).createInitializationOptions());
             PeerConnectionFactory.Options options=new PeerConnectionFactory.Options();
             factory=PeerConnectionFactory.builder().setOptions(options)
