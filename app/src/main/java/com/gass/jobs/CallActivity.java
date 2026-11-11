@@ -190,8 +190,8 @@ public class CallActivity extends Activity {
             for(int i=0;i<rows.length();i++){JSONObject s=rows.getJSONObject(i);String id=s.optString("id","");if(id.isEmpty()||seen.contains(id)||id.equals(initialSignalId))continue;seen.add(id);JSONObject payload=s.optJSONObject("payload");if(payload==null)payload=new JSONObject();String type=s.optString("signal_type","");
                 if("answer".equals(type)){String sdp=payload.optString("sdp","");if(!sdp.isEmpty())peer.setRemoteDescription(new SimpleSdp(){@Override public void onSetSuccess(){remoteDescriptionSet=true;flushCandidates();}},new SessionDescription(SessionDescription.Type.ANSWER,sdp));}
                 else if("ice_candidate".equals(type)){IceCandidate c=new IceCandidate(payload.optString("sdpMid",""),payload.optInt("sdpMLineIndex",0),payload.optString("sdp",""));if(remoteDescriptionSet)peer.addIceCandidate(c);else queuedCandidates.add(c);}
-                else if("reject".equals(type)){setStatus("Call declined");finishCall(false);}
-                else if("hangup".equals(type)){setStatus("Call ended");finishCall(false);}
+                else if("reject".equals(type)){setStatus("Call declined");runOnUiThread(()->finishCall(false));}
+                else if("hangup".equals(type)){setStatus("Call ended");runOnUiThread(()->finishCall(false));}
             }
         }catch(Exception ignored){}handler.postDelayed(this::pollSignals,1800);}).start();
     }
