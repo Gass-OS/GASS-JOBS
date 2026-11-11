@@ -2612,7 +2612,7 @@ public class MainActivity extends Activity {
                         authPrefs().edit().remove("pending_employer_mode").apply();
                         screenHistory.clear();
                         Toast.makeText(this, "Connexion réussie. Bienvenue sur TUN-JOBS !", Toast.LENGTH_LONG).show();
-                        showHome();
+                        if (employerMode) chooseEmployerMode(); else showHome();
                     });
                 } else if (signup) {
                     runOnUiThread(() -> {
@@ -2640,7 +2640,10 @@ public class MainActivity extends Activity {
         connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
         connection.setRequestProperty("Accept", "application/json");
         byte[] body = payload.toString().getBytes("UTF-8");
-        connection.getOutputStream().write(body);
+        try (java.io.OutputStream request = connection.getOutputStream()) {
+            request.write(body);
+            request.flush();
+        }
         int status = connection.getResponseCode();
         java.io.InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
