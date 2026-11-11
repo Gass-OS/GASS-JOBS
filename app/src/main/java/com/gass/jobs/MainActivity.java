@@ -1110,7 +1110,7 @@ public class MainActivity extends Activity {
         content.addView(text("Découvrez des profils candidats sous forme de cartes, puis préparez vos offres d'emploi.", 14, muted, false));
         space(content, 14);
         content.addView(explain(button("♥  Découvrir les candidats", true, this::showCandidateDeck),
-                "Découvrir les candidats", "Affiche des profils candidats sous forme de cartes. Dans cette version, les profils sont fictifs."),
+                "Découvrir les candidats", "Les cartes de démonstration restent disponibles. Le bouton dédié ouvre séparément les vrais profils qui ont accepté d’être visibles."),
                 new LinearLayout.LayoutParams(-1, dp(56)));
         space(content, 6);
         content.addView(text("Les cartes fictives restent séparées des profils réels et ne sont jamais matchées.",12,muted,false));
@@ -1712,7 +1712,7 @@ public class MainActivity extends Activity {
             if (stored) syncProfileToSupabase();
         }), new LinearLayout.LayoutParams(-1, dp(60)));
         space(content, 8);
-        content.addView(text("Enregistrement local : vos informations sont conservées dans l'application et votre photo / CV sont copiés dans son espace privé. Ils restent disponibles après fermeture et redémarrage de l'application. Rien n'est envoyé ni publié.", 13, muted, false));
+        content.addView(text("Votre profil et vos fichiers restent enregistrés sur cet appareil. Seuls les champs professionnels autorisés sont synchronisés lorsque vous activez la visibilité ; téléphone, e-mail, photo et CV restent privés.",13,muted,false));
 
         space(content,12);
         content.addView(button("♥ Likes reçus",false,this::loadIncomingLikes),new LinearLayout.LayoutParams(-1,dp(50)));
