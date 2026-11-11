@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
     private final ArrayList<Job> publishedJobs = new ArrayList<Job>();
     private boolean publishedJobsLoading = false;
 
-    private static final int TAB_HOME = 0, TAB_OFFERS = 1, TAB_PROFILE = 2, TAB_EMPLOYERS = 3, TAB_MORE = 4;
+    private static final int TAB_HOME = 0, TAB_OFFERS = 1, TAB_PROFILE = 2, TAB_INBOX = 3, TAB_EMPLOYERS = 4, TAB_MORE = 5;
     private FrameLayout deckHolder;
     private LinearLayout actionBar;
     private TextView likeStamp, nopeStamp;
@@ -371,7 +371,7 @@ public class MainActivity extends Activity {
             {"Se déconnecter","Log out","تسجيل الخروج"},{"Langue / Language","Language","اللغة"},{"Apparence","Appearance","المظهر"},{"Taille du texte","Text size","حجم النص"},{"Cartes et aide","Cards & help","البطاقات والمساعدة"},
             {"Aide par appui long","Long-press help","المساعدة بالضغط المطول"},{"Conseils sur la page principale","Home tips","نصائح الصفحة الرئيسية"},{"Vibration légère","Light vibration","اهتزاز خفيف"},{"Ma région","My region","منطقتي"},{"Gouvernorat par défaut","Default governorate","الولاية الافتراضية"},
             {"Mon compte","My account","حسابي"},{"Aide","Help","المساعدة"},{"Données sur ce téléphone","Data on this phone","البيانات على هذا الهاتف"},{"À propos","About","حول التطبيق"},{"Retour aux emplois","Back to jobs","العودة إلى الوظائف"},
-            {"Mes matches","My matches","التوافقات"},{"Ouvrir la conversation","Open conversation","فتح المحادثة"},{"Voir le profil complet","View full profile","عرض الملف الكامل"},{"Profil recruteur","Employer profile","ملف صاحب العمل"},{"Profil candidat","Candidate profile","ملف الباحث عن عمل"},{"Retour","Back","رجوع"},
+            {"Mes matches","My matches","التوافقات"},{"Inbox","Inbox","صندوق الوارد"},{"Likes reçus","Received likes","الإعجابات الواردة"},{"Messages","Messages","الرسائل"},{"Ouvrir la conversation","Open conversation","فتح المحادثة"},{"Voir le profil complet","View full profile","عرض الملف الكامل"},{"Profil recruteur","Employer profile","ملف صاحب العمل"},{"Profil candidat","Candidate profile","ملف الباحث عن عمل"},{"Retour","Back","رجوع"},
             {"Chargement...","Loading...","جار التحميل..."},{"Pas encore de match.","No matches yet.","لا توجد تطابقات بعد."},{"Aucun like reçu. Activez la visibilité de votre profil.","No likes yet. Enable profile visibility.","لم تتلق إعجابات بعد. فعّل ظهور ملفك."},
             {"Formation","Education","التعليم"},{"Compétences","Skills","المهارات"},{"Disponibilité","Availability","التوفر"},{"Votre message","Your message","رسالتك"},{"Envoyer le message","Send message","إرسال الرسالة"},
             {"Retour aux paramètres","Back to settings","العودة إلى الإعدادات"},{"Créer une offre","Create a job offer","إنشاء عرض عمل"},{"Découvrir les candidats","Discover candidates","اكتشف المرشحين"}
@@ -501,17 +501,18 @@ public class MainActivity extends Activity {
         LinearLayout nav = row();
         nav.setBackgroundColor(Color.rgb(12, 13, 17));
         nav.setPadding(0, dp(4), 0, dp(6));
-        String[] icons = {"🏠", "💼", "👤", "🏢", "⚙️"};
-        String[] labels = {"Accueil", "Offres", "Profil", "Employeurs", "Plus"};
-        Runnable[] actions = {this::showHome, this::showOffers, this::showProfile, this::showEmployerSpace, this::showMenu};
+        String[] icons = {"🏠", "💼", "👤", "📥", "🏢", "⚙️"};
+        String[] labels = {"Accueil", "Offres", "Profil", "Inbox", "Employeurs", "Plus"};
+        Runnable[] actions = {this::showHome, this::showOffers, this::showProfile, this::showInbox, this::showEmployerSpace, this::showMenu};
         String[] navHelp = {
             "L'accueil : les cartes d'offres à faire glisser (ou de profils si vous recrutez).",
             "Recherche d'offres avec filtres : métier, gouvernorat, secteur et contrat.",
-            "Votre profil candidat : photo, informations, CV et offres sauvegardées. Tout reste sur ce téléphone.",
+            "Votre profil candidat : photo, informations, CV et offres sauvegardées.",
+            "Votre boîte de réception : likes reçus, matches et conversations privées.",
             "L'espace recruteur : identifiez-vous (seul ou société), préparez vos offres et découvrez des profils.",
             "Menu, paramètres, conseils et sites officiels de l'emploi."
         };
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 6; i++) {
             boolean on = i == active;
             LinearLayout item = column();
             item.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -2218,10 +2219,6 @@ public class MainActivity extends Activity {
         space(content, 8);
         content.addView(text("Votre profil est sauvegardé sur cet appareil et synchronisé avec votre compte. La photo est visible lorsque votre profil est public ; téléphone, e-mail et CV restent privés. Le CV et les coordonnées sont réservés aux recruteurs vérifiés après un match.",13,muted,false));
 
-        space(content,12);
-        content.addView(button("♥ Likes reçus",false,this::loadIncomingLikes),new LinearLayout.LayoutParams(-1,dp(50)));
-        space(content,7);
-        content.addView(button("💬 Mes matches et messages",false,this::loadMyMatches),new LinearLayout.LayoutParams(-1,dp(50)));
         space(content,22);
         content.addView(text("Mes offres sauvegardées",20,ink,true));
         Set<String> saved = new HashSet<String>(getSharedPreferences("gass_jobs_saved", MODE_PRIVATE)
@@ -2500,7 +2497,7 @@ public class MainActivity extends Activity {
                 c.setConnectTimeout(12000); c.setReadTimeout(15000);
                 try (InputStream in = c.getInputStream()) {
                     android.graphics.Bitmap bitmap = BitmapFactory.decodeStream(in);
-                    if (bitmap != null) runOnUiThread(() -> target.setImageBitmap(bitmap));
+                    if (bitmap != null) runOnUiThread(() -> { target.clearColorFilter(); target.setImageBitmap(bitmap); });
                 }
             } catch (Exception ignored) {
             } finally { if (c != null) c.disconnect(); }
