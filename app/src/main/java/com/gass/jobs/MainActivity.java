@@ -1818,28 +1818,55 @@ public class MainActivity extends Activity {
         if (uid.isEmpty() || token.isEmpty() || file == null || !file.exists()) return;
         final boolean photo = requestCode == PICK_PROFILE_PHOTO;
         final String bucket = photo ? "profile-photos" : "private-cvs";
-        final String objectPath = uid + "/" + (photo ? "profile-photo" : "profile-cv");
-        final String mime = profilePrefs().getString(photo ? "photo_mime" : "cv_mime", photo ? "image/jpeg" : "application/pdf");
+        final String originalMime = profilePrefs().getString(photo ? "photo_mime" : "cv_mime", photo ? "image/jpeg" : "application/pdf");
         new Thread(() -> {
             HttpURLConnection connection = null;
             try {
+                byte[] uploadBytes;
+                String mime;
+                String objectPath;
+                if (photo) {
+                    android.graphics.Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
+                    if (bitmap == null) throw new Exception("Format photo non pris en charge. Choisissez JPG ou PNG.");
+                    ByteArrayOutputStream jpeg = new ByteArrayOutputStream();
+                    if (!bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, jpeg))
+                        throw new Exception("Impossible de convertir la photo en JPEG.");
+                    bitmap.recycle();
+                    uploadBytes = jpeg.toByteArray();
+                    mime = "image/jpeg";
+                    objectPath = uid + "/profile-photo.jpg";
+                } else {
+                    uploadBytes = java.nio.file.Files.readAllBytes(file.toPath());
+                    mime = originalMime;
+                    objectPath = uid + "/profile-cv" + (mime.equals("application/pdf") ? ".pdf" : mime.equals("application/msword") ? ".doc" : ".docx");
+                }
                 URL url = new URL(SUPABASE_URL + "/storage/v1/object/" + bucket + "/" + objectPath);
                 connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("PUT");
+                connection.setRequestMethod("POST");
                 connection.setConnectTimeout(20000); connection.setReadTimeout(30000);
                 connection.setDoOutput(true);
                 connection.setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY);
                 connection.setRequestProperty("Authorization", "Bearer " + token);
                 connection.setRequestProperty("Content-Type", mime);
                 connection.setRequestProperty("x-upsert", "true");
-                try (InputStream in = new java.io.FileInputStream(file); OutputStream out = connection.getOutputStream()) {
-                    byte[] buffer = new byte[8192]; int count;
-                    while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+                connection.setRequestProperty("cache-control", "3600");
+                try (OutputStream out = connection.getOutputStream()) {
+                    out.write(uploadBytes);
                     out.flush();
                 }
                 int status = connection.getResponseCode();
-                if (status < 200 || status >= 300) throw new Exception("HTTP " + status);
-                String publicUrl = SUPABASE_URL + "/storage/v1/object/public/profile-photos/" + uid + "/profile-photo";
+                if (status < 200 || status >= 300) {
+                    InputStream errorStream = connection.getErrorStream();
+                    ByteArrayOutputStream errorBody = new ByteArrayOutputStream();
+                    if (errorStream != null) {
+                        byte[] buffer = new byte[2048]; int count;
+                        while ((count = errorStream.read(buffer)) != -1) errorBody.write(buffer, 0, count);
+                        errorStream.close();
+                    }
+                    String detail = new String(errorBody.toByteArray(), "UTF-8");
+                    throw new Exception("HTTP " + status + (detail.isEmpty() ? "" : " — " + detail));
+                }
+                String publicUrl = SUPABASE_URL + "/storage/v1/object/public/profile-photos/" + objectPath;
                 SharedPreferences.Editor edit = profilePrefs().edit();
                 if (photo) edit.putString("photo_url", publicUrl);
                 else edit.putString("cv_path", objectPath);
