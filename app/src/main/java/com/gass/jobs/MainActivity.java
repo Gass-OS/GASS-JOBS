@@ -864,14 +864,121 @@ public class MainActivity extends Activity {
         return box;
     }
 
+    private void detailLine(String icon, String label, String value) {
+        if (value == null || value.trim().isEmpty()) return;
+        LinearLayout item = row();
+        item.setGravity(Gravity.TOP);
+        item.setPadding(dp(14), dp(13), dp(14), dp(13));
+        item.setBackground(shape(panel, 15));
+        TextView glyph = text(icon, 22, gold, true);
+        glyph.setGravity(Gravity.CENTER);
+        item.addView(glyph, new LinearLayout.LayoutParams(dp(38), dp(34)));
+        LinearLayout words = column();
+        words.addView(text(label, 12, muted, true));
+        space(words, 3);
+        words.addView(text(value, 16, ink, false));
+        LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(0, -2, 1);
+        wp.leftMargin = dp(8);
+        item.addView(words, wp);
+        content.addView(item, new LinearLayout.LayoutParams(-1, -2));
+        space(content, 9);
+    }
+
+    private void showCandidateDetails(Candidate c) {
+        prepareScreen(false, () -> showCandidateDetails(c));
+        base("Profil candidat", "Fiche détaillée • profil de démonstration.");
+        Drawable portrait = c.photoAsset.isEmpty() ? new AvatarDrawable(avatarSeed(c)) : loadDemoPortrait(c.photoAsset);
+        if (portrait != null) {
+            ImageView photo = new ImageView(this);
+            photo.setImageDrawable(portrait);
+            photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            photo.setBackground(shape(panel, 24));
+            photo.setClipToOutline(true);
+            content.addView(photo, new LinearLayout.LayoutParams(-1, dp(290)));
+        } else {
+            TextView avatar = text(c.name.substring(0, 1).toUpperCase(Locale.ROOT), 64, Color.WHITE, true);
+            avatar.setGravity(Gravity.CENTER);
+            avatar.setBackground(shape(panel, 24));
+            content.addView(avatar, new LinearLayout.LayoutParams(-1, dp(190)));
+        }
+        space(content, 16);
+        content.addView(text(c.name, 27, ink, true));
+        space(content, 4);
+        content.addView(text(c.profession, 17, gold, true));
+        space(content, 8);
+        content.addView(text("📍  " + c.city + "     •     Profil fictif", 14, muted, false));
+        space(content, 18);
+        detailLine("💼", "EXPÉRIENCE", c.experience);
+        detailLine("🎓", "FORMATION", c.education);
+        detailLine("🧩", "COMPÉTENCES", c.skills);
+        detailLine("🟢", "DISPONIBILITÉ", c.availability);
+        LinearLayout note = column();
+        note.setPadding(dp(16), dp(15), dp(16), dp(15));
+        note.setBackground(shape(Color.rgb(47, 35, 18), 17));
+        note.addView(text("ℹ️  Profil de démonstration", 15, gold, true));
+        space(note, 5);
+        note.addView(text("Cette fiche utilise des données fictives et une photo illustrative. Elle ne représente pas une vraie personne, aucune candidature réelle ni aucun moyen de contact n'y est associé.", 13, ink, false));
+        content.addView(note);
+        space(content, 14);
+        content.addView(button("★  Ajouter à la présélection", true, () -> saveCandidate(c)),
+                new LinearLayout.LayoutParams(-1, dp(54)));
+        space(content, 8);
+        content.addView(button("Retour aux profils", false, this::showHome),
+                new LinearLayout.LayoutParams(-1, dp(52)));
+    }
+
+    private void showRealProfileDetails(RealProfile p) {
+        prepareScreen(false, () -> showRealProfileDetails(p));
+        base("Profil candidat", "Informations publiques partagées avec les recruteurs.");
+        TextView avatar = text(p.name == null || p.name.isEmpty() ? "?" :
+                p.name.substring(0, 1).toUpperCase(Locale.ROOT), 64, Color.WHITE, true);
+        avatar.setGravity(Gravity.CENTER);
+        avatar.setBackground(shape(Color.rgb(48, 42, 29), 24));
+        content.addView(avatar, new LinearLayout.LayoutParams(-1, dp(190)));
+        space(content, 16);
+        content.addView(text(p.name, 27, ink, true));
+        space(content, 4);
+        content.addView(text(p.profession, 17, gold, true));
+        space(content, 8);
+        content.addView(text("📍  " + p.city, 14, muted, false));
+        space(content, 18);
+        detailLine("🎓", "FORMATION", p.education);
+        detailLine("🧩", "COMPÉTENCES", p.skills);
+        detailLine("🟢", "DISPONIBILITÉ", p.availability);
+        LinearLayout privacy = column();
+        privacy.setPadding(dp(16), dp(14), dp(16), dp(14));
+        privacy.setBackground(shape(panel, 17));
+        privacy.addView(text("🔒  Respect de la confidentialité", 15, gold, true));
+        space(privacy, 5);
+        privacy.addView(text("Seules les informations publiques choisies par le candidat sont affichées ici. Le téléphone, l'adresse e-mail et le CV ne sont pas exposés dans cette fiche. La photo n'est pas encore fournie par le flux public des profils.", 13, muted, false));
+        content.addView(privacy);
+        space(content, 14);
+        content.addView(button("♥  J'aime ce profil", true, () -> {
+            try {
+                JSONObject body = new JSONObject();
+                body.put("actor_id", me());
+                body.put("target_id", p.id);
+                body.put("decision", "like");
+                new Thread(() -> {
+                    try {
+                        rest("POST", "job_swipes", body);
+                        runOnUiThread(() -> Toast.makeText(this, "Like envoyé. Match si le like est réciproque.", Toast.LENGTH_LONG).show());
+                    } catch (Exception e) {
+                        String message = e.getMessage() == null ? "Action impossible." : e.getMessage();
+                        runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+                    }
+                }).start();
+            } catch (Exception e) {
+                Toast.makeText(this, "Action impossible.", Toast.LENGTH_SHORT).show();
+            }
+        }), new LinearLayout.LayoutParams(-1, dp(54)));
+        space(content, 8);
+        content.addView(button("Retour aux candidats", false, this::loadRealCandidates),
+                new LinearLayout.LayoutParams(-1, dp(52)));
+    }
+
     private void showCandidateDialog(Candidate c) {
-        new AlertDialog.Builder(this)
-                .setTitle(c.name + " — " + c.profession)
-                .setMessage("Ville : " + c.city + "\nExpérience : " + c.experience
-                        + "\nFormation : " + c.education + "\nCompétences : " + c.skills
-                        + "\nDisponibilité : " + c.availability
-                        + "\n\nProfil fictif de démonstration : la photo est illustrative et les informations ne représentent pas une vraie candidature. Aucun contact réel n'est associé.")
-                .setPositiveButton("Fermer", (dialog, which) -> dialog.dismiss()).show();
+        showCandidateDetails(c);
     }
 
     private void renderDeck() {
@@ -922,7 +1029,7 @@ public class MainActivity extends Activity {
             nextCard.run();
         };
         final Runnable details = () -> {
-            if (demoProfile) showCandidateDialog(person);
+            if (demoProfile) showCandidateDetails(person);
             else if (job.isOfficial()) showOfficialJob(job);
             else showJob(job.title, job.company, job.location, job.description);
         };
@@ -1320,28 +1427,99 @@ public class MainActivity extends Activity {
         content.addView(button("Retour aux emplois", true, this::showHome), new LinearLayout.LayoutParams(-1, dp(58)));
     }
 
-    private void showAboutMe() {
-        prepareScreen(false, this::showAboutMe);
-        base("À propos", "Qui sommes-nous ?");
-        LinearLayout banner = column();
-        banner.setPadding(dp(20), dp(22), dp(20), dp(22));
-        banner.setBackground(shape(Color.rgb(22, 35, 52), 18));
-        banner.addView(text("TUN-JOBS", 28, Color.WHITE, true));
-        space(banner, 8);
-        banner.addView(text("Une plateforme tunisienne pour rapprocher les candidats et les employeurs.", 16, Color.WHITE, false));
-        content.addView(banner);
-        space(content, 18);
-        content.addView(text("Créé par GASS-OS", 20, green, true));
-        space(content, 6);
-        content.addView(text("Conçu par Aymen Gharsalli. Notre objectif est de faciliter l'accès aux opportunités d'emploi à Kasserine et dans les 24 gouvernorats de Tunisie.", 15, muted, false));
-        space(content, 16);
-        content.addView(text("Version de démonstration", 17, ink, true));
-        space(content, 6);
-        content.addView(text("Les annonces visibles actuellement sont des exemples fictifs. Les portails publics s'ouvrent directement sur leurs sites officiels. Les comptes, candidatures et publications en ligne nécessitent encore un service sécurisé.", 14, muted, false));
-        space(content, 18);
-        content.addView(button("Retour", true, this::showMenu), new LinearLayout.LayoutParams(-1, dp(58)));
+    private void projectCard(String logo, String title, String subtitle, String url) {
+        LinearLayout card = row();
+        card.setPadding(dp(15), dp(14), dp(14), dp(14));
+        card.setBackground(shape(panel, 18));
+        TextView mark = text(logo, 25, Color.WHITE, true);
+        mark.setGravity(Gravity.CENTER);
+        mark.setBackground(shape(Color.rgb(42, 38, 29), 14));
+        card.addView(mark, new LinearLayout.LayoutParams(dp(54), dp(54)));
+        LinearLayout labels = column();
+        labels.addView(text(title, 16, ink, true));
+        space(labels, 3);
+        labels.addView(text(subtitle, 12, muted, false));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
+        lp.leftMargin = dp(12);
+        card.addView(labels, lp);
+        card.addView(text("↗", 22, gold, true));
+        card.setOnClickListener(v -> openExternal(url));
+        card.setContentDescription(title + " — ouvrir le projet sur GitHub");
+        content.addView(card, new LinearLayout.LayoutParams(-1, -2));
+        space(content, 9);
     }
 
+    private void showAboutMe() {
+        prepareScreen(false, this::showAboutMe);
+        base("À propos de nous", "TUN-JOBS • GASS-OS • Notre histoire et nos projets");
+
+        LinearLayout hero = column();
+        hero.setPadding(dp(20), dp(22), dp(20), dp(22));
+        hero.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[] {Color.rgb(39, 33, 21), Color.rgb(20, 24, 32), Color.rgb(13, 15, 20)}));
+        hero.addView(text("TUN-JOBS", 31, Color.WHITE, true));
+        space(hero, 7);
+        hero.addView(text("🇹🇳  EMPLOI • RECRUTEMENT • OPPORTUNITÉS", 12, gold, true));
+        space(hero, 12);
+        hero.addView(text("Une plateforme tunisienne pensée pour rapprocher les personnes qui cherchent un emploi et les personnes ou organisations qui recrutent. TUN-JOBS met en avant les profils, les compétences et les opportunités, avec une expérience mobile inspirée des cartes interactives : découvrir, consulter, présélectionner et entrer en contact lorsque les conditions de confidentialité et de mise en relation sont réunies.", 15, Color.WHITE, false));
+        content.addView(hero);
+        space(content, 18);
+
+        sectionTitle("Notre mission");
+        content.addView(text("Créé par Aymen Gharsalli et développé sous l'identité GASS-OS, TUN-JOBS est un projet indépendant né avec une attention particulière portée à Kasserine. L'ambition est de rendre les opportunités plus faciles à découvrir dans les 24 gouvernorats de Tunisie, de donner de la visibilité aux compétences locales et de simplifier le premier contact entre candidats, artisans, commerçants, entreprises et recruteurs. L'application évolue progressivement : les retours des utilisateurs, l'accessibilité, la sécurité des données et la fiabilité des annonces guident les améliorations.", 14, muted, false));
+        space(content, 16);
+
+        sectionTitle("Ce que propose TUN-JOBS");
+        infoCard("👤  Espace candidat", "Un profil avec identité professionnelle, région, expérience, formation, compétences, disponibilité, photo et CV. Le candidat garde le contrôle de sa visibilité et choisit les informations qu'il partage.", "Mon profil", this::showProfile);
+        infoCard("🏢  Espace recruteur", "Découverte des profils qui ont volontairement activé leur visibilité, présélection, offres employeur, matches et accès aux conversations après mise en relation réciproque.", "Espace recruteur", this::loadRealCandidates);
+        infoCard("💬  Messagerie et appels", "Conversations privées après match, avec fonctions d'appel vocal et vidéo en cours d'intégration et de validation selon la configuration réseau.", "Mes matches", this::loadMyMatches);
+        infoCard("🏛️  Sources officielles", "Accès aux portails publics de l'emploi et aux annonces ANETI. Les offres officielles renvoient vers leurs fiches d'origine : vérifiez toujours les conditions et dates directement auprès de l'organisme.", "Voir les sources", this::showOfficialSources);
+        space(content, 8);
+
+        sectionTitle("Une application en évolution");
+        content.addView(text("TUN-JOBS est une application Android en développement actif. Elle comprend déjà une interface de découverte par cartes, les espaces candidat et recruteur, l'authentification, la synchronisation de profils, la présélection, les offres publiées, les matches et la messagerie privée. Certaines fonctions, notamment la distribution des appels, la disponibilité des profils et l'automatisation des annonces publiques, dépendent encore de tests, de la configuration des services et des autorisations nécessaires. Les profils et portraits explicitement marqués « démonstration » sont fictifs ; ils servent uniquement à présenter l'interface et ne correspondent pas à de vraies personnes ou offres.", 14, muted, false));
+        space(content, 16);
+
+        sectionTitle("Les projets GASS-OS");
+        content.addView(text("Retrouvez les autres applications et projets développés dans l'écosystème GASS-OS. Touchez une carte pour ouvrir son dépôt GitHub, consulter le code, les versions et les instructions de téléchargement lorsqu'une version est publiée.", 13, muted, false));
+        space(content, 10);
+        projectCard("GJ", "TUN-JOBS / GASS-JOBS", "Android • Emploi, profils et recrutement", "https://github.com/Gass-OS/GASS-JOBS");
+        projectCard("KC", "Kasserine City", "Android / Godot • Jeu mobile 3D inspiré de Kasserine", "https://github.com/Gass-OS/Kasserine-City");
+        projectCard("WH", "WINE-HUB", "Android • Environnement Windows / Wine sur mobile", "https://github.com/Gass-OS/WINE-HUB");
+        projectCard("GN", "GassNative", "Android • Environnement Linux natif et outils mobiles", "https://github.com/Gass-OS/GassNative-");
+        projectCard("GT", "GNOME-Termux", "Android • Expérience de bureau Linux avec Termux", "https://github.com/Gass-OS/GNOME-Termux");
+        projectCard("OS", "GASS-OS sur GitHub", "Organisation • Tous les dépôts et projets publics", "https://github.com/Gass-OS");
+
+        sectionTitle("Licence, droits et crédits");
+        content.addView(text("TUN-JOBS © 2026 Aymen Gharsalli / GASS-OS. Sauf indication contraire dans un fichier de licence associé, le nom TUN-JOBS, l'identité visuelle, les textes originaux, les éléments graphiques et les contributions propres au projet restent protégés par le droit d'auteur. Leur présence dans l'application ou dans un dépôt public ne constitue pas, à elle seule, une autorisation de copie, de modification, de redistribution ou d'exploitation commerciale.", 13, muted, false));
+        space(content, 9);
+        content.addView(text("Le projet peut intégrer des bibliothèques, outils et composants tiers. Chaque dépendance reste soumise à sa propre licence (par exemple les licences open source indiquées par ses auteurs) ; ces licences ne sont ni remplacées ni étendues par la présente notice. Les marques, logos et portails ANETI, ministères et organismes publics appartiennent à leurs propriétaires respectifs. TUN-JOBS est un projet indépendant et ne prétend pas être une application officielle du gouvernement tunisien ni être approuvé par ces organismes.", 13, muted, false));
+        space(content, 9);
+        content.addView(text("Pour demander une autorisation de réutilisation d'un élément original ou signaler un problème de droits, consultez le dépôt GASS-OS ou contactez le créateur via les coordonnées publiées sur son profil GitHub.", 13, muted, false));
+        space(content, 16);
+
+        sectionTitle("Informations de l'application");
+        String version = "0.3.0";
+        try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
+        catch (Exception ignored) { }
+        detailLine("📱", "APPLICATION", "TUN-JOBS • version " + version);
+        detailLine("👨‍💻", "CRÉATION", "Aymen Gharsalli • GASS-OS");
+        detailLine("🌍", "ZONE COUVERTE", "Kasserine et les 24 gouvernorats de Tunisie");
+        detailLine("🔗", "CODE SOURCE", "github.com/Gass-OS/GASS-JOBS");
+        content.addView(button("↗  Ouvrir le dépôt TUN-JOBS sur GitHub", false,
+                () -> openExternal("https://github.com/Gass-OS/GASS-JOBS")),
+                new LinearLayout.LayoutParams(-1, dp(52)));
+        space(content, 8);
+        content.addView(button("➤  Partager TUN-JOBS", false, () -> {
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(Intent.EXTRA_TEXT, "Découvrez TUN-JOBS — plateforme tunisienne pour l'emploi et le recrutement. https://github.com/Gass-OS/GASS-JOBS");
+            startActivity(Intent.createChooser(send, "Partager TUN-JOBS"));
+        }), new LinearLayout.LayoutParams(-1, dp(52)));
+        space(content, 12);
+        content.addView(button("Retour aux paramètres", true, this::showSettings),
+                new LinearLayout.LayoutParams(-1, dp(56)));
+    }
     private void showOfficialSources() {
         prepareScreen(true, this::showOfficialSources);
         base("Offres officielles en Tunisie", "Accès direct aux portails publics — sans copie ni republication des annonces.");
@@ -1909,7 +2087,7 @@ public class MainActivity extends Activity {
     private String rest(String method,String path,JSONObject body)throws Exception{String token=authPrefs().getString("access_token","");if(token.isEmpty()||me().isEmpty())throw new Exception("Connectez-vous pour continuer.");HttpURLConnection c=(HttpURLConnection)new URL(SUPABASE_URL+"/rest/v1/"+path).openConnection();try{c.setRequestMethod(method);c.setConnectTimeout(15000);c.setReadTimeout(20000);c.setRequestProperty("apikey",SUPABASE_PUBLISHABLE_KEY);c.setRequestProperty("Authorization","Bearer "+token);c.setRequestProperty("Accept","application/json");if(body!=null){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");c.setRequestProperty("Prefer","return=minimal");try(OutputStream o=c.getOutputStream()){o.write(body.toString().getBytes("UTF-8"));}}int code=c.getResponseCode();InputStream in=code>=400?c.getErrorStream():c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream();if(in!=null){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);in.close();}String value=new String(out.toByteArray(),"UTF-8");if(code<200||code>=300)throw new Exception("HTTP "+code+" "+value);return value;}finally{c.disconnect();}}
     private JSONArray rows(String path)throws Exception{String x=rest("GET",path,null);return x.isEmpty()?new JSONArray():new JSONArray(x);}
     private String enc(String x){try{return java.net.URLEncoder.encode(x,"UTF-8");}catch(Exception e){return x;}}
-    private void loadRealCandidates(){prepareScreen(false,this::loadRealCandidates);base("Candidats inscrits","Profils réels • visibilité activée volontairement.",TAB_EMPLOYERS,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{String uid=me();JSONArray ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability&account_type=eq.job_seeker&is_discoverable=eq.true&user_id=neq."+enc(uid)+"&order=updated_at.desc&limit=60");JSONArray sw=rows("job_swipes?select=target_id&actor_id=eq."+enc(uid));Set<String> done=new HashSet<>();for(int i=0;i<sw.length();i++)done.add(sw.getJSONObject(i).optString("target_id",""));ArrayList<RealProfile> list=new ArrayList<>();for(int i=0;i<ps.length();i++){RealProfile p=new RealProfile(ps.getJSONObject(i));if(!done.contains(p.id))list.add(p);}runOnUiThread(()->{status.setVisibility(View.GONE);content.addView(text(list.size()+" profil(s) réel(s)",17,gold,true));space(content,8);if(list.isEmpty())content.addView(text("Aucun nouveau profil visible. Les cartes fictives restent séparées.",14,muted,false));for(RealProfile p:list){LinearLayout c=column();c.setPadding(dp(16),dp(16),dp(16),dp(16));c.setBackground(shape(panel,20));c.addView(text(p.name,20,ink,true));c.addView(text(p.profession+" • "+p.city,14,gold,true));if(!p.education.isEmpty())c.addView(text("Formation : "+p.education,13,muted,false));if(!p.skills.isEmpty())c.addView(text("Compétences : "+p.skills,13,muted,false));if(!p.availability.isEmpty())c.addView(text("Disponibilité : "+p.availability,13,muted,false));space(c,10);LinearLayout a=row();a.addView(button("Passer",false,()->swipeReal(p.id,"pass",c)),new LinearLayout.LayoutParams(0,dp(48),1));hspace(a,8);a.addView(button("♥ J'aime",true,()->swipeReal(p.id,"like",c)),new LinearLayout.LayoutParams(0,dp(48),1));c.addView(a);content.addView(c);space(content,10);}content.addView(button("Actualiser",false,this::loadRealCandidates));content.addView(button("Mes matches",false,this::loadMyMatches));});}catch(Exception e){String m=e.getMessage()==null?"Erreur réseau":e.getMessage();runOnUiThread(()->{status.setText("Erreur : "+m);content.addView(button("Réessayer",true,this::loadRealCandidates));});}}).start();}
+    private void loadRealCandidates(){prepareScreen(false,this::loadRealCandidates);base("Candidats inscrits","Profils réels • visibilité activée volontairement.",TAB_EMPLOYERS,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{String uid=me();JSONArray ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability&account_type=eq.job_seeker&is_discoverable=eq.true&user_id=neq."+enc(uid)+"&order=updated_at.desc&limit=60");JSONArray sw=rows("job_swipes?select=target_id&actor_id=eq."+enc(uid));Set<String> done=new HashSet<>();for(int i=0;i<sw.length();i++)done.add(sw.getJSONObject(i).optString("target_id",""));ArrayList<RealProfile> list=new ArrayList<>();for(int i=0;i<ps.length();i++){RealProfile p=new RealProfile(ps.getJSONObject(i));if(!done.contains(p.id))list.add(p);}runOnUiThread(()->{status.setVisibility(View.GONE);content.addView(text(list.size()+" profil(s) réel(s)",17,gold,true));space(content,8);if(list.isEmpty())content.addView(text("Aucun nouveau profil visible. Les cartes fictives restent séparées.",14,muted,false));for(RealProfile p:list){LinearLayout c=column();c.setPadding(dp(16),dp(16),dp(16),dp(16));c.setBackground(shape(panel,20));c.setOnClickListener(v->showRealProfileDetails(p));c.addView(text("👤  "+p.name,20,ink,true));c.addView(text(p.profession+" • "+p.city,14,gold,true));if(!p.education.isEmpty())c.addView(text("Formation : "+p.education,13,muted,false));if(!p.skills.isEmpty())c.addView(text("Compétences : "+p.skills,13,muted,false));if(!p.availability.isEmpty())c.addView(text("Disponibilité : "+p.availability,13,muted,false));space(c,8);c.addView(text("Touchez pour consulter le profil complet  ↗",12,gold,true));space(c,10);LinearLayout a=row();a.addView(button("Passer",false,()->swipeReal(p.id,"pass",c)),new LinearLayout.LayoutParams(0,dp(48),1));hspace(a,8);a.addView(button("♥ J'aime",true,()->swipeReal(p.id,"like",c)),new LinearLayout.LayoutParams(0,dp(48),1));c.addView(a);content.addView(c);space(content,10);}content.addView(button("Actualiser",false,this::loadRealCandidates));content.addView(button("Mes matches",false,this::loadMyMatches));});}catch(Exception e){String m=e.getMessage()==null?"Erreur réseau":e.getMessage();runOnUiThread(()->{status.setText("Erreur : "+m);content.addView(button("Réessayer",true,this::loadRealCandidates));});}}).start();}
     private void swipeReal(String target,String decision,View card){try{JSONObject b=new JSONObject();b.put("actor_id",me());b.put("target_id",target);b.put("decision",decision);new Thread(()->{try{rest("POST","job_swipes",b);runOnUiThread(()->{card.setVisibility(View.GONE);Toast.makeText(this,decision.equals("like")?"Like envoyé. Match si le like est réciproque.":"Profil passé.",Toast.LENGTH_LONG).show();});}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->Toast.makeText(this,m,Toast.LENGTH_LONG).show());}}).start();}catch(Exception e){Toast.makeText(this,"Action impossible.",Toast.LENGTH_SHORT).show();}}
     private void loadIncomingLikes(){prepareScreen(false,this::loadIncomingLikes);base("Likes reçus","Recruteurs intéressés par votre profil.",TAB_PROFILE,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{JSONArray likes=rows("job_swipes?select=actor_id&target_id=eq."+enc(me())+"&decision=eq.like&order=created_at.desc");ArrayList<String> ids=new ArrayList<>();for(int i=0;i<likes.length();i++){String id=likes.getJSONObject(i).optString("actor_id","");if(!id.isEmpty()&&!ids.contains(id))ids.add(id);}JSONArray ps=new JSONArray();if(!ids.isEmpty()){StringBuilder in=new StringBuilder();for(String id:ids){if(in.length()>0)in.append(",");in.append(id);}ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability&user_id=in.("+in+")");}ArrayList<RealProfile> people=new ArrayList<>();for(int i=0;i<ps.length();i++)people.add(new RealProfile(ps.getJSONObject(i)));runOnUiThread(()->{status.setVisibility(View.GONE);if(people.isEmpty())content.addView(text("Aucun like reçu. Activez la visibilité de votre profil.",14,muted,false));for(RealProfile p:people){LinearLayout c=column();c.setPadding(dp(15),dp(14),dp(15),dp(14));c.setBackground(shape(panel,18));c.addView(text(p.name,19,ink,true));c.addView(text(p.profession+" • "+p.city,14,gold,true));space(c,8);c.addView(button("♥ Aimer en retour",true,()->swipeReal(p.id,"like",c)));content.addView(c);space(content,8);}content.addView(button("Mes matches",false,this::loadMyMatches));content.addView(button("Actualiser",false,this::loadIncomingLikes));});}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->status.setText("Erreur : "+m));}}).start();}
     private void loadMyMatches(){prepareScreen(false,this::loadMyMatches);base("Mes matches","Les conversations s'ouvrent après un like réciproque.",employerMode?TAB_EMPLOYERS:TAB_PROFILE,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{String uid=me();JSONArray ms=rows("job_matches?select=id,user_a,user_b&or=(user_a.eq."+enc(uid)+",user_b.eq."+enc(uid)+")&order=created_at.desc");ArrayList<String> ids=new ArrayList<>(),mids=new ArrayList<>();for(int i=0;i<ms.length();i++){JSONObject x=ms.getJSONObject(i);mids.add(x.optString("id",""));ids.add(x.optString("user_a","").equals(uid)?x.optString("user_b",""):x.optString("user_a",""));}JSONArray ps=new JSONArray();if(!ids.isEmpty()){StringBuilder in=new StringBuilder();for(String id:ids){if(in.length()>0)in.append(",");in.append(id);}ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability&user_id=in.("+in+")");}java.util.HashMap<String,RealProfile> map=new java.util.HashMap<>();for(int i=0;i<ps.length();i++){RealProfile p=new RealProfile(ps.getJSONObject(i));map.put(p.id,p);}ArrayList<RealProfile> people=new ArrayList<>();ArrayList<String> matchedIds=new ArrayList<>();for(int i=0;i<ids.size();i++)if(map.containsKey(ids.get(i))){people.add(map.get(ids.get(i)));matchedIds.add(mids.get(i));}runOnUiThread(()->{status.setVisibility(View.GONE);if(people.isEmpty())content.addView(text("Pas encore de match.",14,muted,false));for(int i=0;i<people.size();i++){RealProfile p=people.get(i);String mid=matchedIds.get(i);LinearLayout c=column();c.setPadding(dp(15),dp(14),dp(15),dp(14));c.setBackground(shape(panel,18));c.addView(text("♥ "+p.name,19,ink,true));c.addView(text(p.profession+" • "+p.city,13,muted,false));space(c,8);c.addView(button("Ouvrir la conversation",true,()->openMatchedChat(mid,p)));content.addView(c);space(content,8);}content.addView(button("Actualiser",false,this::loadMyMatches));});}catch(Exception e){String m=e.getMessage()==null?"Erreur":e.getMessage();runOnUiThread(()->status.setText("Erreur : "+m));}}).start();}
