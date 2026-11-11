@@ -964,11 +964,20 @@ public class MainActivity extends Activity {
         prepareScreen(false, () -> showRealProfileDetails(p, backAction));
         base(p.isEmployer() ? "Profil recruteur" : "Profil candidat",
                 "Informations publiques partagées avec les membres de TUN-JOBS.");
-        TextView avatar = text(p.name == null || p.name.isEmpty() ? "?" :
-                p.name.substring(0, 1).toUpperCase(Locale.ROOT), 64, Color.WHITE, true);
-        avatar.setGravity(Gravity.CENTER);
-        avatar.setBackground(shape(Color.rgb(48, 42, 29), 24));
-        content.addView(avatar, new LinearLayout.LayoutParams(-1, dp(190)));
+        if (!p.photoUrl.isEmpty()) {
+            ImageView portrait = new ImageView(this);
+            portrait.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            portrait.setBackground(shape(Color.rgb(48, 42, 29), 24));
+            portrait.setClipToOutline(true);
+            content.addView(portrait, new LinearLayout.LayoutParams(-1, dp(230)));
+            loadRemoteProfilePhoto(p.photoUrl, portrait);
+        } else {
+            TextView avatar = text(p.name == null || p.name.isEmpty() ? "?" :
+                    p.name.substring(0, 1).toUpperCase(Locale.ROOT), 64, Color.WHITE, true);
+            avatar.setGravity(Gravity.CENTER);
+            avatar.setBackground(shape(Color.rgb(48, 42, 29), 24));
+            content.addView(avatar, new LinearLayout.LayoutParams(-1, dp(190)));
+        }
         space(content, 16);
         content.addView(text(p.name, 27, ink, true));
         space(content, 4);
@@ -985,6 +994,10 @@ public class MainActivity extends Activity {
             detailLine("🧩", "COMPÉTENCES", p.skills);
             detailLine("🟢", "DISPONIBILITÉ", p.availability);
             detailLine("💼", "MÉTIER / EXPÉRIENCE", p.profession);
+            detailLine("📅", "ANNÉES D'EXPÉRIENCE", p.experienceYears);
+            detailLine("🌍", "LANGUES", p.languages);
+            detailLine("🏅", "CERTIFICATS ET PERMIS", p.certifications);
+            detailLine("📝", "PRÉSENTATION", p.bio);
         } else {
             sectionTitle("Présentation du recruteur");
             content.addView(text("Ce compte est enregistré comme recruteur. Les coordonnées privées ne sont jamais affichées dans cette fiche. Les offres publiées associées à ce compte apparaissent ci-dessous lorsqu'elles sont disponibles.", 14, muted, false));
@@ -1021,6 +1034,17 @@ public class MainActivity extends Activity {
                     runOnUiThread(() -> offerStatus.setText("Impossible de charger les offres : " + message));
                 }
             }).start();
+        }
+        if (p.isEmployer()) {
+            detailLine("📝", "PRÉSENTATION", p.bio);
+            detailLine("🌍", "LANGUES", p.languages);
+            detailLine("🏅", "CERTIFICATIONS", p.certifications);
+            showEmployerVerificationStatus(p);
+        } else if (employerMode) {
+            space(content, 10);
+            content.addView(button("🔒 Consulter le CV sécurisé", false, () -> openPrivateCv(p)),
+                    new LinearLayout.LayoutParams(-1, dp(50)));
+            content.addView(text("Accès réservé aux recruteurs vérifiés après un match réciproque.", 12, muted, false));
         }
         LinearLayout privacy = column();
         privacy.setPadding(dp(16), dp(14), dp(16), dp(14));
@@ -2221,6 +2245,63 @@ public class MainActivity extends Activity {
 
     // Real profiles only: demo cards never enter these matching or chat endpoints.
     private static class RealProfile {String id,name,city,profession,education,skills,availability,bio,languages,certifications,experienceYears,photoUrl,accountType;RealProfile(JSONObject j){id=j.optString("user_id","");name=j.optString("full_name","Utilisateur");city=j.optString("city","");profession=j.optString("profession","");education=j.optString("education","");skills=j.optString("skills","");availability=j.optString("availability","");bio=j.optString("bio","");languages=j.optString("languages","");certifications=j.optString("certifications","");experienceYears=j.optString("experience_years","");photoUrl=j.optString("photo_url","");accountType=j.optString("account_type","job_seeker");} boolean isEmployer(){return "employer".equals(accountType);}}
+    private void showEmployerVerificationStatus(RealProfile p) {
+        new Thread(() -> {
+            try {
+                JSONArray rows = rows("employer_verifications?select=is_verified,verified_at&user_id=eq." + enc(p.id) + "&limit=1");
+                boolean verified = rows.length() > 0 && rows.getJSONObject(0).optBoolean("is_verified", false);
+                runOnUiThread(() -> {
+                    TextView badge = text(verified ? "✓ EMPLOYEUR VÉRIFIÉ" : "Employeur non vérifié", 13,
+                            verified ? Color.rgb(91, 210, 145) : muted, true);
+                    content.addView(badge, 2);
+                });
+            } catch (Exception ignored) { }
+        }).start();
+    }
+
+    private void openPrivateCv(RealProfile p) {
+        new Thread(() -> {
+            HttpURLConnection c = null;
+            try {
+                String token = authPrefs().getString("access_token", "");
+                URL url = new URL(SUPABASE_URL + "/rest/v1/job_profiles?select=cv_path&user_id=eq." + enc(p.id) + "&limit=1");
+                c = (HttpURLConnection) url.openConnection();
+                c.setRequestMethod("GET"); c.setConnectTimeout(12000); c.setReadTimeout(15000);
+                c.setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY);
+                c.setRequestProperty("Authorization", "Bearer " + token);
+                int code = c.getResponseCode();
+                InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                if (in != null) { byte[] b = new byte[2048]; int n; while ((n=in.read(b))!=-1) out.write(b,0,n); in.close(); }
+                if (code < 200 || code >= 300) throw new Exception("HTTP " + code);
+                JSONArray profiles = new JSONArray(new String(out.toByteArray(), "UTF-8"));
+                if (profiles.length()==0 || profiles.getJSONObject(0).optString("cv_path","").isEmpty())
+                    throw new Exception("Aucun CV partagé pour ce profil.");
+                if (c != null) { c.disconnect(); c = null; }
+                String path = p.id + "/profile-cv";
+                URL sign = new URL(SUPABASE_URL + "/storage/v1/object/sign/private-cvs/" + path);
+                c = (HttpURLConnection) sign.openConnection();
+                c.setRequestMethod("POST"); c.setConnectTimeout(12000); c.setReadTimeout(15000); c.setDoOutput(true);
+                c.setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY);
+                c.setRequestProperty("Authorization", "Bearer " + token);
+                c.setRequestProperty("Content-Type", "application/json");
+                try (OutputStream body = c.getOutputStream()) { body.write("{\"expiresIn\":120}".getBytes("UTF-8")); }
+                code = c.getResponseCode(); in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+                out = new ByteArrayOutputStream();
+                if (in != null) { byte[] b = new byte[2048]; int n; while ((n=in.read(b))!=-1) out.write(b,0,n); in.close(); }
+                if (code < 200 || code >= 300) throw new Exception("Accès refusé : seuls les recruteurs vérifiés ayant un match peuvent consulter ce CV.");
+                JSONObject result = new JSONObject(new String(out.toByteArray(), "UTF-8"));
+                String signed = result.optString("signedURL", "");
+                if (signed.isEmpty()) throw new Exception("Lien sécurisé indisponible.");
+                String finalUrl = signed.startsWith("http") ? signed : SUPABASE_URL + signed;
+                runOnUiThread(() -> openExternal(finalUrl));
+            } catch (Exception e) {
+                String message = e.getMessage() == null ? "Accès CV indisponible." : e.getMessage();
+                runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_LONG).show());
+            } finally { if (c != null) c.disconnect(); }
+        }).start();
+    }
+
     private void loadRemoteProfilePhoto(String imageUrl, ImageView target) {
         new Thread(() -> {
             HttpURLConnection c = null;
