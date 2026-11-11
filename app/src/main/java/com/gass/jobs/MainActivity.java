@@ -1485,6 +1485,7 @@ public class MainActivity extends Activity {
         space(content, 10);
         projectCard("GJ", "TUN-JOBS / GASS-JOBS", "Android • Emploi, profils et recrutement", "https://github.com/Gass-OS/GASS-JOBS");
         projectCard("KC", "Kasserine City", "Android / Godot • Jeu mobile 3D inspiré de Kasserine", "https://github.com/Gass-OS/Kasserine-City");
+        projectCard("LN", "Long Night", "Android / Godot • Jeu mobile d’horreur et de survie", "https://github.com/Gass-OS/long-night");
         projectCard("WH", "WINE-HUB", "Android • Environnement Windows / Wine sur mobile", "https://github.com/Gass-OS/WINE-HUB");
         projectCard("GN", "GassNative", "Android • Environnement Linux natif et outils mobiles", "https://github.com/Gass-OS/GassNative-");
         projectCard("GT", "GNOME-Termux", "Android • Expérience de bureau Linux avec Termux", "https://github.com/Gass-OS/GNOME-Termux");
