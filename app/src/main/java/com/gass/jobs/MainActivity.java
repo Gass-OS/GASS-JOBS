@@ -2259,16 +2259,19 @@ public class MainActivity extends Activity {
     // Real profiles only: demo cards never enter these matching or chat endpoints.
     private static class RealProfile {String id,name,city,profession,education,skills,availability,bio,languages,certifications,experienceYears,photoUrl,accountType;RealProfile(JSONObject j){id=j.optString("user_id","");name=j.optString("full_name","Utilisateur");city=j.optString("city","");profession=j.optString("profession","");education=j.optString("education","");skills=j.optString("skills","");availability=j.optString("availability","");bio=j.optString("bio","");languages=j.optString("languages","");certifications=j.optString("certifications","");experienceYears=j.optString("experience_years","");photoUrl=j.optString("photo_url","");accountType=j.optString("account_type","job_seeker");} boolean isEmployer(){return "employer".equals(accountType);}}
     private void showEmployerVerificationStatus(RealProfile p) {
+        TextView badge = text("Vérification de l'employeur…", 13, muted, true);
+        content.addView(badge);
         new Thread(() -> {
             try {
                 JSONArray rows = rows("employer_verifications?select=is_verified,verified_at&user_id=eq." + enc(p.id) + "&limit=1");
                 boolean verified = rows.length() > 0 && rows.getJSONObject(0).optBoolean("is_verified", false);
                 runOnUiThread(() -> {
-                    TextView badge = text(verified ? "✓ EMPLOYEUR VÉRIFIÉ" : "Employeur non vérifié", 13,
-                            verified ? Color.rgb(91, 210, 145) : muted, true);
-                    content.addView(badge, 2);
+                    badge.setText(verified ? "✓ EMPLOYEUR VÉRIFIÉ" : "Employeur non vérifié");
+                    badge.setTextColor(verified ? Color.rgb(91, 210, 145) : muted);
                 });
-            } catch (Exception ignored) { }
+            } catch (Exception ignored) {
+                runOnUiThread(() -> badge.setText("Statut de vérification indisponible"));
+            }
         }).start();
     }
 
