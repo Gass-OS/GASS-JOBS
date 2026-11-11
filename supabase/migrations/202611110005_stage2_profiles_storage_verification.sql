@@ -33,6 +33,14 @@ on conflict (id) do update set public=false,file_size_limit=10485760,allowed_mim
 drop policy if exists "Users upload own profile photos" on storage.objects;
 create policy "Users upload own profile photos" on storage.objects for insert to authenticated
  with check (bucket_id='profile-photos' and (storage.foldername(name))[1]=auth.uid()::text);
+drop policy if exists "Users view own profile photos for replacement" on storage.objects;
+create policy "Users view own profile photos for replacement" on storage.objects for select to authenticated
+ using (bucket_id='profile-photos' and (storage.foldername(name))[1]=auth.uid()::text);
+
+drop policy if exists "Users view own private CVs for replacement" on storage.objects;
+create policy "Users view own private CVs for replacement" on storage.objects for select to authenticated
+ using (bucket_id='private-cvs' and (storage.foldername(name))[1]=auth.uid()::text);
+
 drop policy if exists "Users update own profile photos" on storage.objects;
 create policy "Users update own profile photos" on storage.objects for update to authenticated
  using (bucket_id='profile-photos' and (storage.foldername(name))[1]=auth.uid()::text)
