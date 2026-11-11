@@ -3,6 +3,8 @@ package com.gass.jobs;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.Context;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -232,6 +234,14 @@ public class MainActivity extends Activity {
                 "https://www.aneti-international.tn/node/1069379", "28/10/2026"));
     }};
 
+    @Override protected void attachBaseContext(Context newBase) {
+        String language = newBase.getSharedPreferences("tun_jobs_settings", MODE_PRIVATE).getString("language", "fr");
+        Locale locale = new Locale(language); Locale.setDefault(locale);
+        Configuration config = new Configuration(newBase.getResources().getConfiguration());
+        config.setLocale(locale); config.setLayoutDirection(locale);
+        super.attachBaseContext(newBase.createConfigurationContext(config));
+    }
+
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         if (hasAuthSession()) {
@@ -398,6 +408,7 @@ public class MainActivity extends Activity {
         pendingRootScreen = false;
 
         root = column();
+        root.setLayoutDirection("ar".equals(settings().getString("language", "fr")) ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
         root.setBackgroundColor(canvas);
         setContentView(root);
         getWindow().setStatusBarColor(canvas);
@@ -490,10 +501,10 @@ public class MainActivity extends Activity {
             View bar = new View(this);
             if (on) bar.setBackground(shape(gold, 2));
             item.addView(bar, new LinearLayout.LayoutParams(dp(26), dp(3)));
-            TextView icon = text(icons[i], 20, Color.WHITE, false);
+            TextView icon = text(icons[i], 29, Color.WHITE, false);
             icon.setGravity(Gravity.CENTER);
             icon.setAlpha(on ? 1f : 0.55f);
-            item.addView(icon, new LinearLayout.LayoutParams(-2, dp(30)));
+            item.addView(icon, new LinearLayout.LayoutParams(-1, dp(40)));
             TextView label = text(labels[i], 11, on ? gold : muted, on);
             label.setGravity(Gravity.CENTER);
             label.setSingleLine(true);
@@ -501,7 +512,7 @@ public class MainActivity extends Activity {
             final Runnable action = actions[i];
             item.setOnClickListener(v -> action.run());
             explain(item, labels[i], navHelp[i]);
-            nav.addView(item, new LinearLayout.LayoutParams(0, dp(62), 1));
+            nav.addView(item, new LinearLayout.LayoutParams(0, dp(72), 1));
         }
         return nav;
     }
@@ -1309,36 +1320,35 @@ public class MainActivity extends Activity {
         Toast.makeText(this, added ? "Profil ajouté à la présélection." : "Profil déjà présélectionné.", Toast.LENGTH_SHORT).show();
     }
 
-    private void showMenu() {
-        prepareScreen(false, this::showMenu);
-        base("Menu TUN-JOBS", "Accès rapide à votre espace et aux réglages.");
-        LinearLayout banner = column();
-        banner.setPadding(dp(20), dp(22), dp(20), dp(22));
-        banner.setBackground(shape(Color.rgb(24, 26, 31), 18));
-        banner.addView(text("TUN-JOBS", 25, Color.WHITE, true));
-        space(banner, 6);
-        banner.addView(text("EMPLOI • RECRUTEMENT • TUNISIE", 13, gold, true));
-        space(banner, 8);
-        banner.addView(text("GASS-OS  •  BY AYMEN GHARSALLI", 13, Color.WHITE, false));
-        content.addView(banner);
-        space(content, 18);
-        content.addView(button("⌂   Emplois", false, this::showHome), new LinearLayout.LayoutParams(-1, dp(58)));
-        space(content, 8);
-        content.addView(button("♙   Mon profil", false, this::showProfile), new LinearLayout.LayoutParams(-1, dp(58)));
-        space(content, 8);
-        content.addView(button("⚙   Paramètres", false, this::showSettings), new LinearLayout.LayoutParams(-1, dp(58)));
-        space(content, 8);
-        content.addView(button("💡   Conseils et aide", false, this::showTips), new LinearLayout.LayoutParams(-1, dp(58)));
-        space(content, 8);
-        content.addView(button("ⓘ   À propos", false, this::showAboutMe), new LinearLayout.LayoutParams(-1, dp(58)));
-        space(content, 8);
-        content.addView(button("Sites officiels de l'emploi", false, this::showOfficialSources), new LinearLayout.LayoutParams(-1, dp(58)));
-        space(content, 8);
-        content.addView(button("Bureaux régionaux", false, this::showEmploymentOffices), new LinearLayout.LayoutParams(-1, dp(58)));
-        space(content, 8);
-        content.addView(button("⇥   Se déconnecter", false, () -> confirmAction("Se déconnecter ?", "Votre session sera fermée sur cet appareil. Vos données locales seront conservées.", "Déconnexion", this::logout)), new LinearLayout.LayoutParams(-1, dp(58)));
+    private void menuCard(String icon, String title, String detail, Runnable action) {
+        LinearLayout card = row(); card.setGravity(Gravity.CENTER_VERTICAL); card.setPadding(dp(16), dp(14), dp(16), dp(14)); card.setBackground(shape(panel, 19));
+        TextView symbol = text(icon, 38, gold, true); symbol.setGravity(Gravity.CENTER); card.addView(symbol, new LinearLayout.LayoutParams(dp(66), dp(66)));
+        LinearLayout labels = column(); labels.addView(text(title, 17, ink, true)); space(labels, 3); labels.addView(text(detail, 12, muted, false));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1); lp.leftMargin = dp(12); card.addView(labels, lp); card.addView(text("›", 30, gold, true));
+        card.setOnClickListener(v -> action.run()); content.addView(card, new LinearLayout.LayoutParams(-1, -2)); space(content, 10);
     }
 
+    private void chooseLanguage() {
+        String[] labels = {"🇫🇷  Français", "🇬🇧  English", "🇹🇳  العربية"}; String[] codes = {"fr", "en", "ar"};
+        new AlertDialog.Builder(this).setTitle("Langue / Language / اللغة")
+                .setSingleChoiceItems(labels, java.util.Arrays.asList(codes).indexOf(settings().getString("language", "fr")), (dialog, which) -> {
+                    settings().edit().putString("language", codes[which]).apply(); dialog.dismiss(); recreate();
+                }).setNegativeButton("Annuler", null).show();
+    }
+
+    private void showMenu() {
+        prepareScreen(false, this::showMenu); base("Plus", "Raccourcis, langue et réglages de TUN-JOBS.");
+        LinearLayout banner = column(); banner.setPadding(dp(20), dp(22), dp(20), dp(22)); banner.setBackground(shape(Color.rgb(24, 26, 31), 18));
+        banner.addView(text("TUN-JOBS", 25, Color.WHITE, true)); space(banner, 6); banner.addView(text("EMPLOI • RECRUTEMENT • TUNISIE", 13, gold, true));
+        space(banner, 8); banner.addView(text("GASS-OS  •  BY AYMEN GHARSALLI", 13, Color.WHITE, false)); content.addView(banner); space(content, 16);
+        menuCard("🌐", "Langue / Language", "Français • English • العربية", this::chooseLanguage);
+        menuCard("⚙️", "Paramètres", "Apparence, région, compte et confidentialité", this::showSettings);
+        menuCard("💡", "Conseils et aide", "Guides et assistance", this::showTips);
+        menuCard("ⓘ", "À propos de nous", "TUN-JOBS, GASS-OS, projets et licences", this::showAboutMe);
+        menuCard("🏛️", "Sites officiels", "ANETI et portails publics de l'emploi", this::showOfficialSources);
+        menuCard("📍", "Bureaux régionaux", "Bureaux de l'emploi en Tunisie", this::showEmploymentOffices);
+        menuCard("⇥", "Se déconnecter", "Fermer cette session sur cet appareil", () -> confirmAction("Se déconnecter ?", "Votre session sera fermée sur cet appareil. Vos données locales seront conservées.", "Déconnexion", this::logout));
+    }
     private void showSettings() {
         prepareScreen(false, this::showSettings);
         base("Paramètres", "Personnalisez TUN-JOBS sur cet appareil.");
