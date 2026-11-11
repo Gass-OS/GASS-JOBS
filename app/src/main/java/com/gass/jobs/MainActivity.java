@@ -54,6 +54,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.io.ByteArrayOutputStream;
+import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private final int ink = Color.rgb(245, 246, 250);
@@ -92,6 +96,10 @@ public class MainActivity extends Activity {
     private boolean chromeless = false;
     private boolean tipDismissed = false;
     private long avatarSalt = System.nanoTime();
+    private boolean authSignupMode = false;
+    private static final String SUPABASE_URL = "https://rwmldlqjwgtjckspqkfl.supabase.co";
+    private static final String SUPABASE_PUBLISHABLE_KEY = "sb_publishable_aYD3mQuWRYLMbqjLCDoBLA_RVdRxu4_";
+    private static final String PREFS_AUTH = "tun_jobs_auth";
 
     private static class Job {
         final String title, company, location, governorate, sector, contract, description;
@@ -210,7 +218,8 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        if (getSharedPreferences("tun_jobs", MODE_PRIVATE).getBoolean("welcome_done", false)) showHome();
+        if (hasAuthSession()) showHome();
+        else if (getSharedPreferences("tun_jobs", MODE_PRIVATE).getBoolean("welcome_done", false)) showAuth();
         else showWelcome();
     }
 
@@ -1133,6 +1142,8 @@ public class MainActivity extends Activity {
         content.addView(button("Sites officiels de l'emploi", false, this::showOfficialSources), new LinearLayout.LayoutParams(-1, dp(58)));
         space(content, 8);
         content.addView(button("Bureaux régionaux", false, this::showEmploymentOffices), new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 8);
+        content.addView(button("⇥   Se déconnecter", false, () -> confirmAction("Se déconnecter ?", "Votre session sera fermée sur cet appareil. Vos données locales seront conservées.", "Déconnexion", this::logout)), new LinearLayout.LayoutParams(-1, dp(58)));
     }
 
     private void showSettings() {
@@ -1171,6 +1182,10 @@ public class MainActivity extends Activity {
         space(content, 14);
 
         sectionTitle("Mon compte");
+        content.addView(text("Connecté avec : " + authPrefs().getString("email", "Compte TUN-JOBS"), 13, muted, false));
+        space(content, 8);
+        content.addView(button("⇥   Se déconnecter", false, () -> confirmAction("Se déconnecter ?", "Votre session sera fermée. Vos données locales restent sur ce téléphone.", "Déconnexion", this::logout)), new LinearLayout.LayoutParams(-1, dp(52)));
+        space(content, 8);
         content.addView(button("♙   Mon profil candidat", false, this::showProfile), new LinearLayout.LayoutParams(-1, dp(52)));
         space(content, 8);
         content.addView(button(hasEmployerProfile() ? "▣   Mon profil recruteur (seul / société)" : "▣   Devenir recruteur", false,
@@ -1437,12 +1452,8 @@ public class MainActivity extends Activity {
 
     private void finishWelcome(boolean recruiter) {
         getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
-        if (recruiter) {
-            chooseEmployerMode();
-        } else {
-            employerMode = false;
-            showHome();
-        }
+        getSharedPreferences(PREFS_AUTH, MODE_PRIVATE).edit().putBoolean("pending_employer_mode", recruiter).apply();
+        showAuth();
     }
 
     private void showWelcomeStep(final int step) {
@@ -2459,6 +2470,195 @@ public class MainActivity extends Activity {
         @Override public void setColorFilter(ColorFilter filter) { paint.setColorFilter(filter); }
 
         @Override public int getOpacity() { return PixelFormat.OPAQUE; }
+    }
+
+
+    // ================================================================ Supabase authentication
+    private SharedPreferences authPrefs() {
+        return getSharedPreferences(PREFS_AUTH, MODE_PRIVATE);
+    }
+
+    private boolean hasAuthSession() {
+        return !authPrefs().getString("access_token", "").isEmpty();
+    }
+
+    private void logout() {
+        authPrefs().edit().clear().apply();
+        authSignupMode = false;
+        screenHistory.clear();
+        showAuth();
+    }
+
+    private EditText authField(String label, String hint, int inputType) {
+        EditText field = new EditText(this);
+        field.setSingleLine(true);
+        field.setTextSize(16);
+        field.setTextColor(ink);
+        field.setHintTextColor(muted);
+        field.setHint(hint);
+        field.setInputType(inputType);
+        field.setPadding(dp(16), dp(12), dp(16), dp(12));
+        field.setBackground(shape(panel, 16));
+        field.setMinimumHeight(dp(54));
+        content.addView(text(label, 13, muted, true));
+        space(content, 5);
+        content.addView(field, new LinearLayout.LayoutParams(-1, dp(56)));
+        space(content, 12);
+        return field;
+    }
+
+    private void showAuth() {
+        prepareScreen(true, this::showAuth);
+        chromeless = true;
+        base("Bienvenue sur TUN-JOBS", "Connectez-vous ou créez votre compte pour continuer.", -1, true);
+        content.setGravity(Gravity.CENTER_HORIZONTAL);
+        LinearLayout brand = column();
+        brand.setGravity(Gravity.CENTER);
+        brand.setPadding(dp(18), dp(14), dp(18), dp(18));
+        brand.setBackground(shape(Color.rgb(25, 27, 33), 22));
+        TextView logo = text("TUN-JOBS", 30, Color.WHITE, true);
+        logo.setGravity(Gravity.CENTER);
+        brand.addView(logo, new LinearLayout.LayoutParams(-1, -2));
+        TextView tagline = text("EMPLOI • RECRUTEMENT • TUNISIE", 12, gold, true);
+        tagline.setGravity(Gravity.CENTER);
+        brand.addView(tagline);
+        content.addView(brand, new LinearLayout.LayoutParams(-1, -2));
+        space(content, 20);
+
+        LinearLayout modes = row();
+        modes.setBackground(shape(panel, 24));
+        modes.setPadding(dp(4), dp(4), dp(4), dp(4));
+        modes.addView(segment("Se connecter", !authSignupMode, () -> { authSignupMode = false; showAuth(); }),
+                new LinearLayout.LayoutParams(0, dp(48), 1));
+        modes.addView(segment("Créer un compte", authSignupMode, () -> { authSignupMode = true; showAuth(); }),
+                new LinearLayout.LayoutParams(0, dp(48), 1));
+        content.addView(modes, new LinearLayout.LayoutParams(-1, -2));
+        space(content, 18);
+
+        final EditText name = authSignupMode
+                ? authField("Nom et prénom", "Votre nom complet", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS)
+                : null;
+        final EditText email = authField("Adresse e-mail", "nom@exemple.com",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        final EditText password = authField("Mot de passe", "Minimum 6 caractères",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        final EditText confirm = authSignupMode
+                ? authField("Confirmer le mot de passe", "Répétez votre mot de passe",
+                        InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD)
+                : null;
+        password.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_NEXT);
+        if (confirm != null) confirm.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        space(content, 4);
+        content.addView(button(authSignupMode ? "Créer mon compte" : "Se connecter", true, () -> {
+            String emailValue = email.getText().toString().trim();
+            String passwordValue = password.getText().toString();
+            String nameValue = name == null ? "" : name.getText().toString().trim();
+            if (!Patterns.EMAIL_ADDRESS.matcher(emailValue).matches()) {
+                email.setError("Adresse e-mail invalide.");
+                return;
+            }
+            if (passwordValue.length() < 6) {
+                password.setError("Le mot de passe doit contenir au moins 6 caractères.");
+                return;
+            }
+            if (authSignupMode && (nameValue.isEmpty() || !passwordValue.equals(confirm.getText().toString()))) {
+                if (nameValue.isEmpty()) name.setError("Indiquez votre nom.");
+                else confirm.setError("Les mots de passe ne correspondent pas.");
+                return;
+            }
+            runAuthRequest(authSignupMode, nameValue, emailValue, passwordValue);
+        }), new LinearLayout.LayoutParams(-1, dp(58)));
+        space(content, 12);
+        TextView privacy = text("Connexion sécurisée avec Supabase. Votre mot de passe n'est jamais enregistré dans l'application.", 12, muted, false);
+        privacy.setGravity(Gravity.CENTER);
+        content.addView(privacy, new LinearLayout.LayoutParams(-1, -2));
+        space(content, 14);
+        content.addView(button("Retour à l'accueil de bienvenue", false, () -> showWelcomeStep(0)),
+                new LinearLayout.LayoutParams(-1, dp(48)));
+    }
+
+    private void runAuthRequest(final boolean signup, final String name, final String email, final String password) {
+        final String endpoint = signup ? "signup" : "token?grant_type=password";
+        Toast.makeText(this, signup ? "Création du compte…" : "Connexion…", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("email", email);
+                payload.put("password", password);
+                if (signup) {
+                    JSONObject data = new JSONObject();
+                    data.put("full_name", name);
+                    payload.put("data", data);
+                }
+                JSONObject result = supabaseAuthRequest(endpoint, payload);
+                JSONObject session = result.optJSONObject("session");
+                if (session == null) session = result;
+                String access = session.optString("access_token", "");
+                String refresh = session.optString("refresh_token", "");
+                JSONObject user = result.optJSONObject("user");
+                if (user == null) user = session.optJSONObject("user");
+                if (!access.isEmpty()) {
+                    SharedPreferences.Editor editor = authPrefs().edit()
+                            .putString("access_token", access)
+                            .putString("refresh_token", refresh)
+                            .putString("email", email)
+                            .putBoolean("email_confirmed", user == null || user.optString("email_confirmed_at", "").length() > 0);
+                    if (user != null) editor.putString("user_id", user.optString("id", ""));
+                    if (signup) editor.putString("full_name", name);
+                    editor.apply();
+                    runOnUiThread(() -> {
+                        getSharedPreferences("tun_jobs", MODE_PRIVATE).edit().putBoolean("welcome_done", true).apply();
+                        employerMode = authPrefs().getBoolean("pending_employer_mode", false);
+                        authPrefs().edit().remove("pending_employer_mode").apply();
+                        screenHistory.clear();
+                        Toast.makeText(this, "Connexion réussie. Bienvenue sur TUN-JOBS !", Toast.LENGTH_LONG).show();
+                        showHome();
+                    });
+                } else if (signup) {
+                    runOnUiThread(() -> {
+                        authSignupMode = false;
+                        showAuth();
+                        Toast.makeText(this, "Compte créé. Vérifiez votre e-mail pour confirmer votre adresse, puis connectez-vous.", Toast.LENGTH_LONG).show();
+                    });
+                } else {
+                    throw new Exception("La réponse du serveur ne contient pas de session.");
+                }
+            } catch (Exception error) {
+                String message = error.getMessage() == null ? "Erreur de connexion." : error.getMessage();
+                runOnUiThread(() -> Toast.makeText(this, "Authentification : " + message, Toast.LENGTH_LONG).show());
+            }
+        }).start();
+    }
+
+    private JSONObject supabaseAuthRequest(String endpoint, JSONObject payload) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(SUPABASE_URL + "/auth/v1/" + endpoint).openConnection();
+        connection.setRequestMethod("POST");
+        connection.setConnectTimeout(15000);
+        connection.setReadTimeout(20000);
+        connection.setDoOutput(true);
+        connection.setRequestProperty("apikey", SUPABASE_PUBLISHABLE_KEY);
+        connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+        connection.setRequestProperty("Accept", "application/json");
+        byte[] body = payload.toString().getBytes("UTF-8");
+        connection.getOutputStream().write(body);
+        int status = connection.getResponseCode();
+        java.io.InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        if (stream != null) {
+            byte[] buffer = new byte[4096];
+            int count;
+            while ((count = stream.read(buffer)) != -1) output.write(buffer, 0, count);
+            stream.close();
+        }
+        connection.disconnect();
+        String response = new String(output.toByteArray(), "UTF-8");
+        JSONObject json = response.isEmpty() ? new JSONObject() : new JSONObject(response);
+        if (status < 200 || status >= 300) {
+            String reason = json.optString("msg", json.optString("message",
+                    json.optString("error_description", json.optString("error", "Erreur serveur HTTP " + status))));
+            throw new Exception(reason);
+        }
+        return json;
     }
 
     private void showNotice() {
