@@ -2702,6 +2702,7 @@ public class MainActivity extends Activity {
         return baseName + "-" + uid;
     }
 
+    // Recruiter/company details are private to the same signed-in account as the candidate profile.
     private SharedPreferences employerPrefs() {
         String uid = authPrefs().getString("user_id", "").trim();
         if (uid.isEmpty()) uid = "signed-out";
