@@ -739,7 +739,7 @@ public class MainActivity extends Activity {
 
     private View jobCard(Job job, int index, int total) {
         String badge = job.isPublishedEmployerOffer() ? "✓ OFFRE EMPLOYEUR PUBLIÉE"
-                : (job.isOfficial() ? "✓ ANETI • OFFRE OFFICIELLE" : "● Annonce de démonstration");
+                : (job.isOfficial() ? "ANETI • FICHE SOURCE À VÉRIFIER" : "● Annonce de démonstration");
         String dateLine = job.publishedDate.isEmpty() ? "" : " • Publié le " + job.publishedDate;
         return deckCard(palette(job.sector), badge, job.location, sectorGlyph(job.sector),
                 job.title, "🏢  " + job.company, "📍  " + job.location + dateLine
@@ -1288,7 +1288,9 @@ public class MainActivity extends Activity {
         }
         resultsContainer.addView(text(visibleJobs.size() + " offre(s) trouvée(s)", 17, gold, true));
         space(resultsContainer, 2);
-        resultsContainer.addView(text(publishedJobs.size()+" offre(s) employeur • "+anetiJobs.size()+" offre(s) ANETI International • annonces de démonstration séparées.", 12, muted, false));
+        resultsContainer.addView(text(publishedJobs.size()+" offre(s) employeur publiée(s) • "+anetiJobs.size()+" fiche(s) ANETI International enregistrée(s) • annonces de démonstration séparées.", 12, muted, false));
+        space(resultsContainer, 4);
+        resultsContainer.addView(text("Les fiches ANETI International sont issues d'un relevé consulté le 10/11/2026, pas d'un flux en temps réel. Vérifiez leur disponibilité sur la fiche officielle avant de postuler. ANETI national, Idaraty et les concours publics restent accessibles séparément dans les sources officielles.", 12, muted, false));
         space(resultsContainer, 10);
         if (visibleJobs.isEmpty()) {
             resultsContainer.addView(text("Aucune offre ne correspond à ces filtres.", 15, muted, false));
@@ -1301,6 +1303,14 @@ public class MainActivity extends Activity {
             item.addView(text(job.title, 18, ink, true));
             space(item, 3);
             item.addView(text(job.company + " • " + job.location, 14, muted, false));
+            if (job.isOfficial()) {
+                space(item, 4);
+                item.addView(text("SOURCE : ANETI INTERNATIONAL • Publié : "
+                        + (job.publishedDate.isEmpty() ? "date non indiquée" : job.publishedDate),
+                        12, gold, true));
+                item.addView(text("Relevé du 10/11/2026 — disponibilité à confirmer sur la fiche originale.",
+                        11, muted, false));
+            }
             space(item, 10);
             LinearLayout chips = row();
             chips.addView(chip(job.sector, true));
@@ -1308,15 +1318,15 @@ public class MainActivity extends Activity {
             chips.addView(chip(job.contract, false));
             item.addView(chips);
             space(item, 12);
-            if (job.isOfficial()) {
-                item.addView(text("✓ ANETI OFFICIEL • Publié : "+(job.publishedDate.isEmpty()?"date non indiquée":job.publishedDate), 12, gold, true));
-                space(item, 8);
-            } else if (job.company.toLowerCase(Locale.ROOT).contains("démonstration") || job.company.toLowerCase(Locale.ROOT).contains("fict")) {
+            if (job.company.toLowerCase(Locale.ROOT).contains("démonstration") || job.company.toLowerCase(Locale.ROOT).contains("fict")) {
                 item.addView(text("PROFIL / OFFRE DE DÉMONSTRATION", 11, muted, true));
                 space(item, 8);
             }
-            item.addView(button(job.isOfficial() ? "Voir la fiche ANETI" : "Voir l'offre", true,
-                    () -> { if (job.isOfficial()) showOfficialJob(job); else showJob(job.title, job.company, job.location, job.description); }),
+            item.addView(button(job.isOfficial() ? "Vérifier sur ANETI" : "Voir l'offre", true,
+                    () -> {
+                        if (job.isOfficial()) showOfficialJob(job);
+                        else showJob(job.title, job.company, job.location, job.description);
+                    }),
                     new LinearLayout.LayoutParams(-1, dp(46)));
             resultsContainer.addView(item);
             space(resultsContainer, 10);
@@ -1839,7 +1849,7 @@ public class MainActivity extends Activity {
         space(content, 14);
         sectionTitle("Sources surveillées");
         infoCard("ANETI — emploi.nat.tn", "Portail national de l'emploi. Consultez les offres et services directement auprès de l'ANETI.", "Ouvrir le portail ANETI", () -> openExternal("https://www.emploi.nat.tn/"));
-        infoCard("Idaraty.tn", "Portail national des services administratifs. Les avis de recrutement doivent être confirmés sur la page de l'organisme émetteur.", "Ouvrir Idaraty", () -> openExternal("https://www.idaraty.tn/"));
+        infoCard("Idaraty — recrutement", "Page officielle de recrutement propre à Idaraty ; ce n'est pas une base générale de toutes les offres d'emploi.", "Ouvrir Idaraty recrute", () -> openExternal("https://www.idaraty.tn/public/index.php/fr/recrute"));
         infoCard("Concours de la fonction publique", "Avis et concours publics. Vérifiez les dates, conditions et pièces requises dans l'avis original.", "Ouvrir concours.gov.tn", () -> openExternal("https://www.concours.gov.tn/"));
         infoCard("Ministère de l'Emploi", "Communiqués, programmes et informations institutionnelles.", "Ouvrir le ministère", () -> openExternal("https://www.emploi.gov.tn/fr/"));
         space(content, 10);
@@ -2048,7 +2058,9 @@ public class MainActivity extends Activity {
         base("Offres officielles en Tunisie", "Accès direct aux portails publics — sans copie ni republication des annonces.");
         content.addView(text("Consultez les annonces directement sur les sites officiels. Les disponibilités, conditions et dates limites sont celles publiées par chaque organisme.", 14, muted, false));
         space(content, 16);
-        infoCard("ANETI — Agence nationale pour l'emploi", "Portail national de l'emploi et des services aux demandeurs d'emploi et aux entreprises. Les offres doivent être vérifiées sur le site source.", "Ouvrir emploi.nat.tn", () -> openExternal("https://www.emploi.nat.tn/"));
+        infoCard("ANETI — offres nationales", "Portail national de l'emploi. Consultez directement les offres nationales ; elles ne sont pas encore synchronisées automatiquement dans l'application.", "Ouvrir les offres ANETI Tunisie", () -> openExternal(ANETI_TUNISIA_OFFERS));
+        infoCard("ANETI International", "Offres d'emploi à l'étranger. Les fiches reprises dans le carrousel sont un relevé daté et doivent être revérifiées sur le site source.", "Ouvrir les offres internationales", () -> openExternal(ANETI_INTERNATIONAL_OFFERS));
+        infoCard("Idaraty — recrutement", "Page de recrutement propre à Idaraty ; elle ne constitue pas un agrégateur général d'offres.", "Ouvrir Idaraty recrute", () -> openExternal("https://www.idaraty.tn/public/index.php/fr/recrute"));
         infoCard("Concours de la fonction publique", "Portail national des concours et recrutements publics. Vérifiez les conditions, pièces exigées et délais dans chaque avis.", "Ouvrir concours.gov.tn", () -> openExternal("https://www.concours.gov.tn/"));
         infoCard("Ministère de l'Emploi", "Informations officielles, directions régionales, programmes et actualités du ministère.", "Ouvrir le ministère", () -> openExternal("https://www.emploi.gov.tn/fr/"));
         infoCard("Ministère de l'Intérieur — recrutements", "Portail de recrutement et avis publiés par le ministère. Consultez chaque annonce pour les modalités officielles.", "Ouvrir le portail de recrutement", () -> openExternal("https://recrutementdaf.interieur.gov.tn/Daaf/home"));
@@ -3003,14 +3015,14 @@ public class MainActivity extends Activity {
 
     private void showOfficialJob(Job job) {
         prepareScreen(false, () -> showOfficialJob(job));
-        base(job.title, "ANETI • " + job.location, TAB_OFFERS, true);
-        content.addView(chip("✓ OFFRE PUBLIÉE PAR ANETI", true));
+        base(job.title, "ANETI International • " + job.location, TAB_OFFERS, true);
+        content.addView(chip("SOURCE OFFICIELLE • DISPONIBILITÉ À CONFIRMER", true));
         space(content, 10);
         content.addView(text("Date de publication : " + job.publishedDate, 14, gold, true));
         space(content, 10);
         content.addView(text(job.description, 16, ink, false));
         space(content, 14);
-        content.addView(text("Source : ANETI International. La date limite n'était pas indiquée dans la fiche consultée. Vérifiez que l'offre est toujours ouverte avant de préparer votre candidature.", 13, muted, false));
+        content.addView(text("Source : ANETI International. Relevé consulté le 10/11/2026 ; cette date ne correspond pas à une actualisation en direct. La date limite n'était pas indiquée dans la fiche consultée. Vérifiez que l'offre est toujours ouverte et que ses conditions n'ont pas changé avant de postuler.", 13, muted, false));
         space(content, 14);
         content.addView(button("Ouvrir l'annonce originale ANETI", true, () -> openExternal(job.sourceUrl)));
         space(content, 10);
