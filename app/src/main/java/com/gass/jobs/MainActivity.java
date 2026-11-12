@@ -1266,6 +1266,17 @@ public class MainActivity extends Activity {
             if (!"Tous".equals(contract) && !job.contract.equalsIgnoreCase(contract)) continue;
             visibleJobs.add(job);
         }
+        // Official ANETI International listings are included in the searchable jobs hub.
+        // Their source links and publication dates remain visible; they are not treated as employer demo posts.
+        for (Job job : anetiJobs) {
+            String searchable = (job.title + " " + job.company + " " + job.location + " " + job.governorate + " "
+                    + job.sector + " " + job.contract + " " + job.description + " " + job.publishedDate).toLowerCase(Locale.ROOT);
+            if (!query.isEmpty() && !searchable.contains(query)) continue;
+            if (!"Tous".equals(governorate) && !job.governorate.equalsIgnoreCase(governorate)) continue;
+            if (!"Tous".equals(sector) && !job.sector.equalsIgnoreCase(sector)) continue;
+            if (!"Tous".equals(contract) && !job.contract.equalsIgnoreCase(contract)) continue;
+            visibleJobs.add(job);
+        }
         for (Job job : demoJobs) {
             String searchable = (job.title + " " + job.company + " " + job.location + " " + job.governorate + " "
                     + job.sector + " " + job.contract + " " + job.description).toLowerCase(Locale.ROOT);
@@ -1277,7 +1288,7 @@ public class MainActivity extends Activity {
         }
         resultsContainer.addView(text(visibleJobs.size() + " offre(s) trouvée(s)", 17, gold, true));
         space(resultsContainer, 2);
-        resultsContainer.addView(text(publishedJobs.size()+" offre(s) publiée(s) par les employeurs • annonces de démonstration clairement séparées.", 12, muted, false));
+        resultsContainer.addView(text(publishedJobs.size()+" offre(s) employeur • "+anetiJobs.size()+" offre(s) ANETI International • annonces de démonstration séparées.", 12, muted, false));
         space(resultsContainer, 10);
         if (visibleJobs.isEmpty()) {
             resultsContainer.addView(text("Aucune offre ne correspond à ces filtres.", 15, muted, false));
@@ -1297,8 +1308,15 @@ public class MainActivity extends Activity {
             chips.addView(chip(job.contract, false));
             item.addView(chips);
             space(item, 12);
-            item.addView(button("Voir l'offre", true,
-                    () -> showJob(job.title, job.company, job.location, job.description)),
+            if (job.isOfficial()) {
+                item.addView(text("✓ ANETI OFFICIEL • Publié : "+(job.publishedDate.isEmpty()?"date non indiquée":job.publishedDate), 12, gold, true));
+                space(item, 8);
+            } else if (job.company.toLowerCase(Locale.ROOT).contains("démonstration") || job.company.toLowerCase(Locale.ROOT).contains("fict")) {
+                item.addView(text("PROFIL / OFFRE DE DÉMONSTRATION", 11, muted, true));
+                space(item, 8);
+            }
+            item.addView(button(job.isOfficial() ? "Voir la fiche ANETI" : "Voir l'offre", true,
+                    () -> { if (job.isOfficial()) showOfficialJob(job); else showJob(job.title, job.company, job.location, job.description); }),
                     new LinearLayout.LayoutParams(-1, dp(46)));
             resultsContainer.addView(item);
             space(resultsContainer, 10);
