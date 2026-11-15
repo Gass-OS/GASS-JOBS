@@ -1,0 +1,33 @@
+name: GASS-JOBS Android APK
+
+on:
+  push:
+    branches: [main, feature/android-mvp, integration/official-directory-into-mvp-20261109, feature/webrtc-calls-20261111, feature/chat-profile-ui-20261111, feature/inbox-chat-avatar-20261111, feature/project-logos-intro-audio-20261111, feature/radio-tv-settings-20261111]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build debug APK
+        run: gradle --no-daemon assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GASS-JOBS-Android-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
