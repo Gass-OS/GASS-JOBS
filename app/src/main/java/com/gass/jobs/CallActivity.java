@@ -30,6 +30,13 @@ public class CallActivity extends Activity {
     private static final String SUPABASE_URL="https://rwmldlqjwgtjckspqkfl.supabase.co";
     private static final String SUPABASE_KEY="sb_publishable_aYD3mQuWRYLMbqjLCDoBLA_RVdRxu4_";
     private static final String TURN_WORKER="https://tun-jobs-turn.iirc69mrgh.workers.dev";
+    // Call robustness (2026-11-15): retry transient backend failures instead of
+    // dying on the first 5xx/timeout. TURN credential minting is idempotent, so
+    // all 5xx + any IOException are retried. Worst case: 3 attempts, ~3s backoff.
+    private static final int MAX_ATTEMPTS=3;
+    private static final long[] RETRY_DELAY_MS={1000,2000};
+    // Outgoing ring timeout: callee never answers (e.g. offline) -> end gracefully.
+    private static final int RING_TIMEOUT_MS=30000;
     private String matchId, remoteId, remoteName, userId, accessToken, initialSignalId;
     private boolean video, outgoing, started=false, muted=false, cameraOff=false, finished=false;
     private JSONObject incomingOffer;
@@ -49,6 +56,7 @@ public class CallActivity extends Activity {
     private final Set<String> seen=new HashSet<>();
     private final List<IceCandidate> queuedCandidates=new ArrayList<>();
     private boolean remoteDescriptionSet=false;
+    private boolean callAnswered=false;
 
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
@@ -112,8 +120,31 @@ public class CallActivity extends Activity {
     }
 
     private JSONArray fetchTurn()throws Exception{
+        Exception lastError=null;
+        for(int attempt=1;attempt<=MAX_ATTEMPTS;attempt++){
+            try{return fetchTurnOnce();}
+            catch(Exception e){
+                lastError=e;
+                if(attempt<MAX_ATTEMPTS&&shouldRetryTurn(e)){
+                    setStatus("TURN service slow — retrying ("+attempt+"/3)…");
+                    try{Thread.sleep(RETRY_DELAY_MS[attempt-1]);}catch(InterruptedException ie){Thread.currentThread().interrupt();throw lastError;}
+                }else break;
+            }
+        }
+        throw lastError;
+    }
+
+    // TURN minting is idempotent (same matchId -> fresh credentials), so any
+    // 5xx or network failure is safe to retry. 4xx (auth/config) is not.
+    private boolean shouldRetryTurn(Exception e){
+        String m=e.getMessage()==null?"":e.getMessage();
+        if(m.contains("HTTP 500")||m.contains("HTTP 502")||m.contains("HTTP 503")||m.contains("HTTP 504"))return true;
+        return e instanceof java.io.IOException;
+    }
+
+    private JSONArray fetchTurnOnce()throws Exception{
         HttpURLConnection c=(HttpURLConnection)new URL(TURN_WORKER).openConnection();
-        try{c.setRequestMethod("POST");c.setConnectTimeout(15000);c.setReadTimeout(20000);c.setDoOutput(true);c.setRequestProperty("Authorization","Bearer "+accessToken);c.setRequestProperty("Content-Type","application/json");
+        try{c.setRequestMethod("POST");c.setConnectTimeout(15000);c.setReadTimeout(30000);c.setDoOutput(true);c.setRequestProperty("Authorization","Bearer "+accessToken);c.setRequestProperty("Content-Type","application/json");
             JSONObject body=new JSONObject();body.put("matchId",matchId);try(OutputStream o=c.getOutputStream()){o.write(body.toString().getBytes("UTF-8"));}
             int code=c.getResponseCode();InputStream in=code>=400?c.getErrorStream():c.getInputStream();String response=read(in);if(code<200||code>=300)throw new Exception("TURN service HTTP "+code+": "+response);
             return new JSONObject(response).getJSONArray("iceServers");
@@ -134,7 +165,7 @@ public class CallActivity extends Activity {
             PeerConnection.RTCConfiguration config=new PeerConnection.RTCConfiguration(servers);
             peer=factory.createPeerConnection(config,new PeerConnection.Observer(){
                 @Override public void onSignalingChange(PeerConnection.SignalingState s){}
-                @Override public void onIceConnectionChange(PeerConnection.IceConnectionState s){if(s==PeerConnection.IceConnectionState.CONNECTED||s==PeerConnection.IceConnectionState.COMPLETED)setStatus("Connected • "+remoteName);else if(s==PeerConnection.IceConnectionState.FAILED)setStatus("Connection failed");else if(s==PeerConnection.IceConnectionState.DISCONNECTED)setStatus("Reconnecting…");}
+                @Override public void onIceConnectionChange(PeerConnection.IceConnectionState s){if(s==PeerConnection.IceConnectionState.CONNECTED||s==PeerConnection.IceConnectionState.COMPLETED){callAnswered=true;setStatus("Connected • "+remoteName);}else if(s==PeerConnection.IceConnectionState.FAILED)setStatus("Connection failed");else if(s==PeerConnection.IceConnectionState.DISCONNECTED)setStatus("Reconnecting…");}
                 @Override public void onIceConnectionReceivingChange(boolean b){}
                 @Override public void onIceGatheringChange(PeerConnection.IceGatheringState s){}
                 @Override public void onIceCandidate(IceCandidate c){try{JSONObject p=new JSONObject();p.put("sdpMid",c.sdpMid);p.put("sdpMLineIndex",c.sdpMLineIndex);p.put("sdp",c.sdp);sendSignal("ice_candidate",p);}catch(Exception ignored){}}
@@ -167,7 +198,7 @@ public class CallActivity extends Activity {
 
     private void createOffer(){
         peer.createOffer(new SimpleSdp(){@Override public void onCreateSuccess(SessionDescription s){
-            peer.setLocalDescription(new SimpleSdp(){@Override public void onSetSuccess(){JSONObject p=new JSONObject();try{p.put("type","offer");p.put("sdp",s.description);p.put("video",video);sendSignal("offer",p);setStatus("Calling "+remoteName+"…");}catch(Exception e){setStatus(e.getMessage());}}},s);
+            peer.setLocalDescription(new SimpleSdp(){@Override public void onSetSuccess(){JSONObject p=new JSONObject();try{p.put("type","offer");p.put("sdp",s.description);p.put("video",video);sendSignal("offer",p);setStatus("Calling "+remoteName+"…");scheduleRingTimeout();}catch(Exception e){setStatus(e.getMessage());}}},s);
         }},new MediaConstraints());
     }
     private void acceptOffer(){
@@ -189,13 +220,25 @@ public class CallActivity extends Activity {
         if(finished)return;
         new Thread(()->{try{String path="job_call_signals?select=id,sender_id,signal_type,payload&match_id=eq."+enc(matchId)+"&recipient_id=eq."+enc(userId)+"&order=created_at.asc&limit=50";JSONArray rows=new JSONArray(rest("GET",path,null));
             for(int i=0;i<rows.length();i++){JSONObject s=rows.getJSONObject(i);String id=s.optString("id","");if(id.isEmpty()||seen.contains(id)||id.equals(initialSignalId))continue;seen.add(id);JSONObject payload=s.optJSONObject("payload");if(payload==null)payload=new JSONObject();String type=s.optString("signal_type","");
-                if("answer".equals(type)){String sdp=payload.optString("sdp","");if(!sdp.isEmpty())peer.setRemoteDescription(new SimpleSdp(){@Override public void onSetSuccess(){remoteDescriptionSet=true;flushCandidates();}},new SessionDescription(SessionDescription.Type.ANSWER,sdp));}
+                if("answer".equals(type)){callAnswered=true;String sdp=payload.optString("sdp","");if(!sdp.isEmpty())peer.setRemoteDescription(new SimpleSdp(){@Override public void onSetSuccess(){remoteDescriptionSet=true;flushCandidates();}},new SessionDescription(SessionDescription.Type.ANSWER,sdp));}
                 else if("ice_candidate".equals(type)){IceCandidate c=new IceCandidate(payload.optString("sdpMid",""),payload.optInt("sdpMLineIndex",0),payload.optString("sdp",""));if(remoteDescriptionSet)peer.addIceCandidate(c);else queuedCandidates.add(c);}
                 else if("reject".equals(type)){setStatus("Call declined");runOnUiThread(()->finishCall(false));}
                 else if("hangup".equals(type)){setStatus("Call ended");runOnUiThread(()->finishCall(false));}
             }
         }catch(Exception ignored){}handler.postDelayed(this::pollSignals,1800);}).start();
     }
+    // Outgoing call: if nobody answers within RING_TIMEOUT_MS the callee is
+    // most likely offline — end with a clear message instead of ringing forever.
+    // The offer row stays in job_call_signals, so the callee can still see the
+    // missed call via "Vérifier les appels entrants" and call back.
+    private void scheduleRingTimeout(){
+        handler.postDelayed(()->{
+            if(finished||callAnswered||!outgoing)return;
+            setStatus("No answer — user may be offline");
+            handler.postDelayed(()->{if(!finished)finishCall(false);},2500);
+        },RING_TIMEOUT_MS);
+    }
+
     private void flushCandidates(){for(IceCandidate c:queuedCandidates)peer.addIceCandidate(c);queuedCandidates.clear();}
     private void toggleMute(){muted=!muted;if(audioTrack!=null)audioTrack.setEnabled(!muted);Toast.makeText(this,muted?"Microphone muted":"Microphone on",Toast.LENGTH_SHORT).show();}
     private void toggleCamera(){cameraOff=!cameraOff;if(localVideoTrack!=null)localVideoTrack.setEnabled(!cameraOff);Toast.makeText(this,cameraOff?"Camera off":"Camera on",Toast.LENGTH_SHORT).show();}
@@ -207,6 +250,34 @@ public class CallActivity extends Activity {
 
     private String enc(String s)throws Exception{return URLEncoder.encode(s,"UTF-8");}
     private String rest(String method,String path,JSONObject body)throws Exception{
+        boolean isGet="GET".equalsIgnoreCase(method);
+        Exception lastError=null;
+        for(int attempt=1;attempt<=MAX_ATTEMPTS;attempt++){
+            try{return restOnce(method,path,body);}
+            catch(Exception e){
+                lastError=e;
+                if(attempt<MAX_ATTEMPTS&&shouldRetryRest(e,isGet)){
+                    try{Thread.sleep(RETRY_DELAY_MS[attempt-1]);}catch(InterruptedException ie){Thread.currentThread().interrupt();throw lastError;}
+                }else break;
+            }
+        }
+        throw lastError;
+    }
+
+    // Retry rule: 502/503/504 + connection failures (nothing reached the server)
+    // are always safe. A read timeout on a POST is NOT retried: the signal may
+    // already be stored and a duplicate offer/answer could confuse the peer
+    // (GETs are idempotent, so they retry on any timeout).
+    private boolean shouldRetryRest(Exception e,boolean isGet){
+        String m=e.getMessage()==null?"":e.getMessage();
+        if(m.contains("HTTP 502")||m.contains("HTTP 503")||m.contains("HTTP 504"))return true;
+        if(e instanceof java.net.ConnectException)return true;
+        if(e instanceof java.net.UnknownHostException)return true;
+        if(e instanceof java.net.SocketTimeoutException)return isGet||m.toLowerCase().contains("connect");
+        return false;
+    }
+
+    private String restOnce(String method,String path,JSONObject body)throws Exception{
         HttpURLConnection c=(HttpURLConnection)new URL(SUPABASE_URL+"/rest/v1/"+path).openConnection();
         try{c.setRequestMethod(method);c.setConnectTimeout(12000);c.setReadTimeout(15000);c.setRequestProperty("apikey",SUPABASE_KEY);c.setRequestProperty("Authorization","Bearer "+accessToken);c.setRequestProperty("Accept","application/json");if(body!=null){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");c.setRequestProperty("Prefer","return=minimal");try(OutputStream o=c.getOutputStream()){o.write(body.toString().getBytes("UTF-8"));}}
             int code=c.getResponseCode();InputStream in=code>=400?c.getErrorStream():c.getInputStream();String value=read(in);if(code<200||code>=300)throw new Exception("HTTP "+code+" "+value);return value;
