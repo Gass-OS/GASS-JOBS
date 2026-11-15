@@ -1,0 +1,40 @@
+# TUN-JOBS keep-alive — stops the Supabase free-tier project from sleeping.
+# A sleeping project takes ~8s to wake and answers 503/504 while it resumes,
+# which kills the first call of the day. One cheap ping a day keeps it warm.
+# Runs from main only (scheduled workflows only run on the default branch).
+# The publishable key below is already public in the shipped APK source
+# (CallActivity.java / MainActivity.java) — no new secret is exposed here.
+# The TURN worker check expects 401 "Login required" (no token sent), which
+# proves the worker is alive; any other code fails the run visibly.
+
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: "0 6 * * *"  # daily 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST
+        run: |
+          code=$(curl -s -o /tmp/supabase.txt -w "%{http_code}" --max-time 60 \
+            -H "apikey: sb_publishable_aYD3mQuWRYLMbqjLCDoBLA_RVdRxu4_" \
+            "https://rwmldlqjwgtjckspqkfl.supabase.co/rest/v1/job_call_signals?select=id&limit=1")
+          echo "Supabase REST: HTTP $code"
+          cat /tmp/supabase.txt
+          [ "$code" = "200" ] || exit 1
+      - name: Ping TURN worker
+        run: |
+          code=$(curl -s -o /tmp/turn.txt -w "%{http_code}" --max-time 60 \
+            -X POST -H "Content-Type: application/json" \
+            -d '{"matchId":"keep-alive"}' \
+            "https://tun-jobs-turn.iirc69mrgh.workers.dev")
+          echo "TURN worker: HTTP $code"
+          cat /tmp/turn.txt
+          [ "$code" = "401" ] || exit 1
