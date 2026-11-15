@@ -1912,7 +1912,37 @@ public class MainActivity extends Activity {
     // Real profiles only: demo cards never enter these matching or chat endpoints.
     private static class RealProfile {String id,name,city,profession,education,skills,availability;RealProfile(JSONObject j){id=j.optString("user_id","");name=j.optString("full_name","Candidat");city=j.optString("city","");profession=j.optString("profession","");education=j.optString("education","");skills=j.optString("skills","");availability=j.optString("availability","");}}
     private String me(){return authPrefs().getString("user_id","");}
-    private String rest(String method,String path,JSONObject body)throws Exception{String token=authPrefs().getString("access_token","");if(token.isEmpty()||me().isEmpty())throw new Exception("Connectez-vous pour continuer.");HttpURLConnection c=(HttpURLConnection)new URL(SUPABASE_URL+"/rest/v1/"+path).openConnection();try{c.setRequestMethod(method);c.setConnectTimeout(15000);c.setReadTimeout(20000);c.setRequestProperty("apikey",SUPABASE_PUBLISHABLE_KEY);c.setRequestProperty("Authorization","Bearer "+token);c.setRequestProperty("Accept","application/json");if(body!=null){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");c.setRequestProperty("Prefer","return=minimal");try(OutputStream o=c.getOutputStream()){o.write(body.toString().getBytes("UTF-8"));}}int code=c.getResponseCode();InputStream in=code>=400?c.getErrorStream():c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream();if(in!=null){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);in.close();}String value=new String(out.toByteArray(),"UTF-8");if(code<200||code>=300)throw new Exception("HTTP "+code+" "+value);return value;}finally{c.disconnect();}}
+    // Call robustness (2026-11-15): retry transient backend failures. GETs are
+    // idempotent and retry on 502/503/504 + any IOException. POSTs (chat
+    // messages, swipes) retry ONLY when the connection was never established
+    // (connect/DNS failure) — never on an HTTP error response, or a message
+    // the server already stored would be sent twice.
+    private String rest(String method,String path,JSONObject body)throws Exception{
+        boolean isGet="GET".equalsIgnoreCase(method);
+        Exception lastError=null;
+        for(int attempt=1;attempt<=3;attempt++){
+            try{return restOnce(method,path,body);}
+            catch(Exception e){
+                lastError=e;
+                if(attempt<3&&shouldRetryRest(e,isGet)){
+                    try{Thread.sleep(attempt==1?1000:2000);}catch(InterruptedException ie){Thread.currentThread().interrupt();throw lastError;}
+                }else break;
+            }
+        }
+        throw lastError;
+    }
+    private boolean shouldRetryRest(Exception e,boolean isGet){
+        String m=e.getMessage()==null?"":e.getMessage();
+        if(isGet){
+            if(m.contains("HTTP 502")||m.contains("HTTP 503")||m.contains("HTTP 504"))return true;
+            return e instanceof java.io.IOException;
+        }
+        if(e instanceof java.net.ConnectException)return true;
+        if(e instanceof java.net.UnknownHostException)return true;
+        if(e instanceof java.net.SocketTimeoutException)return m.toLowerCase().contains("connect");
+        return false;
+    }
+    private String restOnce(String method,String path,JSONObject body)throws Exception{String token=authPrefs().getString("access_token","");if(token.isEmpty()||me().isEmpty())throw new Exception("Connectez-vous pour continuer.");HttpURLConnection c=(HttpURLConnection)new URL(SUPABASE_URL+"/rest/v1/"+path).openConnection();try{c.setRequestMethod(method);c.setConnectTimeout(15000);c.setReadTimeout(20000);c.setRequestProperty("apikey",SUPABASE_PUBLISHABLE_KEY);c.setRequestProperty("Authorization","Bearer "+token);c.setRequestProperty("Accept","application/json");if(body!=null){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");c.setRequestProperty("Prefer","return=minimal");try(OutputStream o=c.getOutputStream()){o.write(body.toString().getBytes("UTF-8"));}}int code=c.getResponseCode();InputStream in=code>=400?c.getErrorStream():c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream();if(in!=null){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);in.close();}String value=new String(out.toByteArray(),"UTF-8");if(code<200||code>=300)throw new Exception("HTTP "+code+" "+value);return value;}finally{c.disconnect();}}
     private JSONArray rows(String path)throws Exception{String x=rest("GET",path,null);return x.isEmpty()?new JSONArray():new JSONArray(x);}
     private String enc(String x){try{return java.net.URLEncoder.encode(x,"UTF-8");}catch(Exception e){return x;}}
     private void loadRealCandidates(){prepareScreen(false,this::loadRealCandidates);base("Candidats inscrits","Profils réels • visibilité activée volontairement.",TAB_EMPLOYERS,true);TextView status=text("Chargement...",14,muted,false);content.addView(status);new Thread(()->{try{String uid=me();JSONArray ps=rows("job_profiles?select=user_id,full_name,city,profession,education,skills,availability&account_type=eq.job_seeker&is_discoverable=eq.true&user_id=neq."+enc(uid)+"&order=updated_at.desc&limit=60");JSONArray sw=rows("job_swipes?select=target_id&actor_id=eq."+enc(uid));Set<String> done=new HashSet<>();for(int i=0;i<sw.length();i++)done.add(sw.getJSONObject(i).optString("target_id",""));ArrayList<RealProfile> list=new ArrayList<>();for(int i=0;i<ps.length();i++){RealProfile p=new RealProfile(ps.getJSONObject(i));if(!done.contains(p.id))list.add(p);}runOnUiThread(()->{status.setVisibility(View.GONE);content.addView(text(list.size()+" profil(s) réel(s)",17,gold,true));space(content,8);if(list.isEmpty())content.addView(text("Aucun nouveau profil visible. Les cartes fictives restent séparées.",14,muted,false));for(RealProfile p:list){LinearLayout c=column();c.setPadding(dp(16),dp(16),dp(16),dp(16));c.setBackground(shape(panel,20));c.addView(text(p.name,20,ink,true));c.addView(text(p.profession+" • "+p.city,14,gold,true));if(!p.education.isEmpty())c.addView(text("Formation : "+p.education,13,muted,false));if(!p.skills.isEmpty())c.addView(text("Compétences : "+p.skills,13,muted,false));if(!p.availability.isEmpty())c.addView(text("Disponibilité : "+p.availability,13,muted,false));space(c,10);LinearLayout a=row();a.addView(button("Passer",false,()->swipeReal(p.id,"pass",c)),new LinearLayout.LayoutParams(0,dp(48),1));hspace(a,8);a.addView(button("♥ J'aime",true,()->swipeReal(p.id,"like",c)),new LinearLayout.LayoutParams(0,dp(48),1));c.addView(a);content.addView(c);space(content,10);}content.addView(button("Actualiser",false,this::loadRealCandidates));content.addView(button("Mes matches",false,this::loadMyMatches));});}catch(Exception e){String m=e.getMessage()==null?"Erreur réseau":e.getMessage();runOnUiThread(()->{status.setText("Erreur : "+m);content.addView(button("Réessayer",true,this::loadRealCandidates));});}}).start();}
